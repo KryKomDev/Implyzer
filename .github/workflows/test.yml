@@ -1,0 +1,48 @@
+﻿name: Test ImplTypeCheck
+
+on:
+  push:
+    paths:
+      - 'ImplTypeCheck/**'
+      - 'ImplTypeCheck.Tests/**'
+      - '.github/workflows/test.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+
+    runs-on: ubuntu-latest
+    
+    env:
+      SolutionName: ./ImplTypeCheck.slnx
+      ProjectPath: ./ImplTypeCheck/ImplTypeCheck/ImplTypeCheck.csproj
+      TestProjectPath: ./ImplTypeCheck/ImplTypeCheck.Tests/ImplTypeCheck.Tests.csproj
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.SolutionName }}
+
+      - name: Build project
+        run: dotnet build ${{ env.ProjectPath }} --no-restore
+
+      - name: Build test project
+        run: dotnet build ${{ env.TestProjectPath }} --no-restore
+
+      - name: Execute unit tests
+        run: dotnet test ${{ env.TestProjectPath }} --no-build
+
+      - name: Restore the application
+        run: dotnet restore ${{ env.TestProjectPath }}

@@ -1,0 +1,118 @@
+name: Publish and release ImplTypeCheck
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  SolutionName: ./ImplTypeCheck.slnx
+  ProjectPath: ./ImplTypeCheck/ImplTypeCheck/ImplTypeCheck.csproj
+  TestProjectPath: ./ImplTypeCheck/ImplTypeCheck.Tests/ImplTypeCheck.Tests.csproj
+  NugetOutputDir: ./nupkg/
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.ProjectPath }}
+
+    - name: Build
+      run: dotnet build ${{ env.ProjectPath }} --configuration Release --no-restore
+
+    - name: Test
+      run: dotnet test ${{ env.TestProjectPath }}
+  
+    - name: Pack
+      run: dotnet pack ${{ env.ProjectPath }} --configuration Release --no-build --output ${{ env.NugetOutputDir }}
+    
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts
+        path: |
+          ${{ env.NugetOutputDir }}
+          ./ImplTypeCheck/bin/Release/netstandard2.0/ImplTypeCheck.dll
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Download Build Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: build-artifacts
+        path: artifacts
+
+    - name: Push to NuGet
+      run: |
+        # Use simple glob expansion in shell
+        for f in artifacts/${{ env.NugetOutputDir }}*.nupkg; do
+          if [[ "$f" != *"symbols.nupkg" ]]; then
+            dotnet nuget push "$f" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+          fi
+        done
+      shell: bash
+          
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Download Build Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: build-artifacts
+        path: artifacts
+
+    - name: Generate Release Notes
+      id: release_notes
+      run: |
+        echo "commits<<EOF" >> $GITHUB_OUTPUT
+        # Get commits from the beginning or previous tag. 
+        # Here we just dump all commits for simplicity as requested 'all commit messages', 
+        # but realistically probably means 'for this release'.
+        # Trying to find previous tag:
+        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        
+        if [ -z "$PREV_TAG" ]; then
+          git log --pretty=format:"* %s" >> $GITHUB_OUTPUT
+        else
+          git log $PREV_TAG..HEAD --pretty=format:"* %s" >> $GITHUB_OUTPUT
+        fi
+        echo "" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Create Source Zip
+      run: git archive -o source_code.zip HEAD
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        body: ${{ steps.release_notes.outputs.commits }}
+        files: |
+          artifacts/ImplTypeCheck/ImplTypeCheck/bin/Release/netstandard2.0/ImplTypeCheck.dll
+          source_code.zip
