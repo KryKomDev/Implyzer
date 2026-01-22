@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <TargetFramework>netstandard2.0</TargetFramework>
-        <IsPackable>false</IsPackable>
+        <IsPackable>true</IsPackable>
         <Nullable>enable</Nullable>
         <LangVersion>latest</LangVersion>
 
@@ -11,6 +11,10 @@
 
         <RootNamespace>ImplTypeCheck</RootNamespace>
         <AssemblyName>ImplTypeCheck</AssemblyName>
+        <Authors>KryKomDev</Authors>
+        <Description>A Roslyn analyzer for restraining interface implementations</Description>
+        <PackageIcon>Package-Icon.png</PackageIcon>
+        <RepositoryUrl>https://github.com/KryKomDev/ImplTypeCheck</RepositoryUrl>
     </PropertyGroup>
 
     <ItemGroup>
@@ -19,7 +23,6 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
-<!--        <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.0.0" />-->
     </ItemGroup>
 
     <ItemGroup>
@@ -42,10 +45,13 @@
     </ItemGroup>
 
     <ItemGroup>
-      <AdditionalFiles Remove="AnalyzerReleases.Shipped.md" />
-      <AdditionalFiles Include="Releases\AnalyzerReleases.Shipped.md" />
-      <AdditionalFiles Remove="AnalyzerReleases.Unshipped.md" />
-      <AdditionalFiles Include="Releases\AnalyzerReleases.Unshipped.md" />
+        <AdditionalFiles Include="Releases/AnalyzerReleases.Shipped.md" />
+        <AdditionalFiles Include="Releases/AnalyzerReleases.Unshipped.md" />
     </ItemGroup>
 
+    <ItemGroup>
+        <None Include="../../Assets/Package-Icon.png" Pack="true" PackagePath="" />
+    </ItemGroup>
+
+    <!-- -->
 </Project>
