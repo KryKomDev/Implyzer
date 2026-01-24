@@ -47,7 +47,7 @@ jobs:
         name: build-artifacts
         path: |
           ${{ env.NugetOutputDir }}
-          ./ImplTypeCheck/bin/Release/netstandard2.0/ImplTypeCheck.dll
+          ./ImplTypeCheck/ImplTypeCheck/bin/Release/netstandard2.0/ImplTypeCheck.dll
 
   publish:
     needs: build

@@ -5,15 +5,12 @@ using Xunit;
 
 namespace ImplTypeCheck.Tests;
 
-public static class VerifyCS
-{
+public static class VerifyCS {
     public static DiagnosticResult Diagnostic(string diagnosticId)
         => CSharpAnalyzerVerifier<ImplTypeAnalyzer, DefaultVerifier>.Diagnostic(diagnosticId);
 
-    public static async Task VerifyAnalyzerAsync(string source, params DiagnosticResult[] expected)
-    {
-        var test = new CSharpAnalyzerTest<ImplTypeAnalyzer, DefaultVerifier>
-        {
+    public static async Task VerifyAnalyzerAsync(string source, params DiagnosticResult[] expected) {
+        var test = new CSharpAnalyzerTest<ImplTypeAnalyzer, DefaultVerifier> {
             TestCode = source,
         };
 
