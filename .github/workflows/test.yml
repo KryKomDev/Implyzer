@@ -33,7 +33,7 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore dependencies
-        run: dotnet restore ${{ env.SolutionName }}
+        run: dotnet restore ${{ env.SolutionName }} --ignore-failed-sources
 
       - name: Build project
         run: dotnet build ${{ env.ProjectPath }} --no-restore
