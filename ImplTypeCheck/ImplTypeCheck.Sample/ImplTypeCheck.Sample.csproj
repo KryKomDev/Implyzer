@@ -1,13 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net9.0</TargetFramework>
+        <TargetFrameworks>net5.0;net10.0</TargetFrameworks>
+        <LangVersion>14</LangVersion>
         <Nullable>enable</Nullable>
+        
+        <LocalPackagingTest>false</LocalPackagingTest>
     </PropertyGroup>
 
-    <ItemGroup>
-        <ProjectReference Include="..\ImplTypeCheck\ImplTypeCheck.csproj"
-                          OutputItemType="Analyzer" ReferenceOutputAssembly="false"/>
+    <ItemGroup Condition="'$(LocalPackagingTest)' == 'false'">
+        <ProjectReference Include="..\ImplTypeCheck\ImplTypeCheck.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </ProjectReference>
     </ItemGroup>
-
+    
+    <ItemGroup Condition="'$(LocalPackagingTest)' == 'true'">
+        <PackageReference Include="ImplTypeCheck" Version="1.0.1" OutputItemType="Analyzer" ReferenceOutputAssembly="false">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+    
 </Project>

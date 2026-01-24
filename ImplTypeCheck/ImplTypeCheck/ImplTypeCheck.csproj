@@ -9,6 +9,8 @@
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <IsRoslynComponent>true</IsRoslynComponent>
 
+        <PackageVersion>1.0.1</PackageVersion>
+        
         <RootNamespace>ImplTypeCheck</RootNamespace>
         <AssemblyName>ImplTypeCheck</AssemblyName>
         <Authors>KryKomDev</Authors>
@@ -52,6 +54,8 @@
     <ItemGroup>
         <None Include="../../Assets/Package-Icon.png" Pack="true" PackagePath="" />
     </ItemGroup>
-
-    <!-- -->
+    
+    <ItemGroup>
+        <None Include="$(OutputPath)/**/*.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    </ItemGroup>
 </Project>
