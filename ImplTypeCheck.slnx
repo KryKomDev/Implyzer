@@ -1,5 +1,0 @@
-<Solution>
-    <Project Path="ImplTypeCheck/ImplTypeCheck.Sample/ImplTypeCheck.Sample.csproj" />
-    <Project Path="ImplTypeCheck/ImplTypeCheck.Tests/ImplTypeCheck.Tests.csproj" />
-    <Project Path="ImplTypeCheck/ImplTypeCheck/ImplTypeCheck.csproj" />
-</Solution>

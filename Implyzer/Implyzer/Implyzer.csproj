@@ -9,14 +9,14 @@
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <IsRoslynComponent>true</IsRoslynComponent>
 
-        <PackageVersion>1.0.1</PackageVersion>
+        <PackageVersion>1.1.0</PackageVersion>
         
-        <RootNamespace>ImplTypeCheck</RootNamespace>
-        <AssemblyName>ImplTypeCheck</AssemblyName>
+        <RootNamespace>Implyzer</RootNamespace>
+        <AssemblyName>Implyzer</AssemblyName>
         <Authors>KryKomDev</Authors>
         <Description>A Roslyn analyzer for restraining interface implementations</Description>
         <PackageIcon>Package-Icon.png</PackageIcon>
-        <RepositoryUrl>https://github.com/KryKomDev/ImplTypeCheck</RepositoryUrl>
+        <RepositoryUrl>https://github.com/KryKomDev/Implyzer</RepositoryUrl>
     </PropertyGroup>
 
     <ItemGroup>
@@ -44,6 +44,7 @@
 
     <ItemGroup>
         <EmbeddedResource Include="Templates\ImplTypeAttribute.cs"/>
+        <EmbeddedResource Include="Templates\IndirectImplAttribute.cs"/>
     </ItemGroup>
 
     <ItemGroup>

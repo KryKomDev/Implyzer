@@ -1,10 +1,10 @@
-﻿name: Test ImplTypeCheck
+﻿name: Test Implyzer
 
 on:
   push:
     paths:
-      - 'ImplTypeCheck/**'
-      - 'ImplTypeCheck.Tests/**'
+      - 'Implyzer/**'
+      - 'Implyzer.Tests/**'
       - '.github/workflows/test.yml'
   workflow_dispatch:
 
@@ -17,9 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     
     env:
-      SolutionName: ./ImplTypeCheck.slnx
-      ProjectPath: ./ImplTypeCheck/ImplTypeCheck/ImplTypeCheck.csproj
-      TestProjectPath: ./ImplTypeCheck/ImplTypeCheck.Tests/ImplTypeCheck.Tests.csproj
+      SolutionName: ./Implyzer.slnx
+      ProjectPath: ./Implyzer/Implyzer/Implyzer.csproj
+      TestProjectPath: ./Implyzer/Implyzer.Tests/Implyzer.Tests.csproj
 
     steps:
       - name: Checkout

@@ -3,7 +3,7 @@
     "profiles": {
         "DebugRoslynAnalyzers": {
             "commandName": "DebugRoslynComponent",
-            "targetProject": "../ImplTypeCheck.Sample/ImplTypeCheck.Sample.csproj"
+            "targetProject": "../Implyzer.Sample/Implyzer.Sample.csproj"
         }
     }
 }

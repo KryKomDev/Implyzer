@@ -1,4 +1,4 @@
-name: Publish and release ImplTypeCheck
+name: Publish and release Implyzer
 
 on:
   push:
@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
 
 env:
-  SolutionName: ./ImplTypeCheck.slnx
-  ProjectPath: ./ImplTypeCheck/ImplTypeCheck/ImplTypeCheck.csproj
-  TestProjectPath: ./ImplTypeCheck/ImplTypeCheck.Tests/ImplTypeCheck.Tests.csproj
+  SolutionName: ./Implyzer.slnx
+  ProjectPath: ./Implyzer/Implyzer/Implyzer.csproj
+  TestProjectPath: ./Implyzer/Implyzer.Tests/Implyzer.Tests.csproj
   NugetOutputDir: ./nupkg/
 
 permissions:
@@ -50,7 +50,7 @@ jobs:
         name: build-artifacts
         path: |
           ${{ env.NugetOutputDir }}
-          ./ImplTypeCheck/ImplTypeCheck/bin/Release/netstandard2.0/ImplTypeCheck.dll
+          ./Implyzer/Implyzer/bin/Release/netstandard2.0/Implyzer.dll
 
   publish:
     needs: build
@@ -117,5 +117,5 @@ jobs:
       with:
         body: ${{ steps.release_notes.outputs.commits }}
         files: |
-          artifacts/ImplTypeCheck/ImplTypeCheck/bin/Release/netstandard2.0/ImplTypeCheck.dll
+          artifacts/Implyzer/Implyzer/bin/Release/netstandard2.0/Implyzer.dll
           source_code.zip

@@ -3,22 +3,27 @@ using System.Reflection;
 using System.Text;
 using Microsoft.CodeAnalysis.Text;
 
-namespace ImplTypeCheck;
+namespace Implyzer;
 
 [Generator]
 public class ImplTypeAttributeGenerator : IIncrementalGenerator {
     public void Initialize(IncrementalGeneratorInitializationContext context) {
+        RegisterResource(context, "ImplTypeAttribute");
+        RegisterResource(context, "IndirectImplAttribute");
+    }
+
+    private static void RegisterResource(IncrementalGeneratorInitializationContext context, string name) {
         context.RegisterPostInitializationOutput(ctx => {
-            var assembly = Assembly.GetExecutingAssembly();
-            var resourceName = "ImplTypeCheck.Templates.ImplTypeAttribute.cs";
+            var assembly     = Assembly.GetExecutingAssembly();
+            var resourceName = $"Implyzer.Templates.{name}.cs";
 
             using var stream = assembly.GetManifestResourceStream(resourceName);
             if (stream == null) return;
 
             using var reader = new StreamReader(stream);
-            var source = reader.ReadToEnd();
+            var       source = reader.ReadToEnd();
 
-            ctx.AddSource("ImplTypeAttribute.g.cs", SourceText.From(source, Encoding.UTF8));
+            ctx.AddSource($"{name}.g.cs", SourceText.From(source, Encoding.UTF8));
         });
     }
 }

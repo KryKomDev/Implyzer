@@ -18,7 +18,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\ImplTypeCheck\ImplTypeCheck.csproj"/>
+        <ProjectReference Include="..\Implyzer\Implyzer.csproj"/>
     </ItemGroup>
 
 </Project>

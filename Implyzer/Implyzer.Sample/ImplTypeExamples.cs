@@ -1,4 +1,4 @@
-namespace ImplTypeCheck.Sample;
+namespace Implyzer.Sample;
 
 [ImplType(ImplKind.ReferenceType)]
 public interface IService {

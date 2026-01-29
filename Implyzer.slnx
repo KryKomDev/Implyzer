@@ -1,0 +1,5 @@
+<Solution>
+    <Project Path="Implyzer/Implyzer.Sample/Implyzer.Sample.csproj" />
+    <Project Path="Implyzer/Implyzer.Tests/Implyzer.Tests.csproj" />
+    <Project Path="Implyzer/Implyzer/Implyzer.csproj" />
+</Solution>

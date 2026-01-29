@@ -1,6 +1,6 @@
-# ImplTypeCheck
+# Implyzer
 
-**ImplTypeCheck** is a Roslyn source generator and analyzer that enforces implementation constraints on interfaces. It allows you to specify whether an interface should be implemented only by **classes** (reference types) or **structs** (value types), and can even enforce a specific **base class**.
+**Implyzer** is a Roslyn source generator and analyzer that enforces implementation constraints on interfaces. It allows you to specify whether an interface should be implemented only by **classes** (reference types) or **structs** (value types), and can even enforce a specific **base class**.
 
 ## Features
 
@@ -20,7 +20,7 @@ Add the analyzer to your project via NuGet (coming soon) or reference the projec
 Use `[ImplType(ImplKind.ReferenceType)]` to ensure an interface is only implemented by classes.
 
 ```csharp
-using ImplTypeCheck;
+using Implyzer;
 
 [ImplType(ImplKind.ReferenceType)]
 public interface IService
@@ -46,7 +46,7 @@ public struct MyStruct : IService
 Use `[ImplType(ImplKind.ValueType)]` to ensure an interface is only implemented by structs.
 
 ```csharp
-using ImplTypeCheck;
+using Implyzer;
 
 [ImplType(ImplKind.ValueType)]
 public interface IData
@@ -72,7 +72,7 @@ public class DataObject : IData
 Use `[ImplType(typeof(MyBaseClass))]` to ensure implementing classes inherit from a specific base class. This implicitly enforces `ImplKind.ReferenceType`.
 
 ```csharp
-using ImplTypeCheck;
+using Implyzer;
 
 public class GameEntity { }
 

@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis.CSharp.Testing;
 using Microsoft.CodeAnalysis.Testing;
 using Xunit;
 
-namespace ImplTypeCheck.Tests;
+namespace Implyzer.Tests;
 
 public static class VerifyCS {
     public static DiagnosticResult Diagnostic(string diagnosticId)
@@ -23,9 +23,9 @@ public class ImplTypeAnalyzerTests {
     private static string CreateTestSource(string testSnippet) {
         return $$"""
                using System;
-               using ImplTypeCheck;
+               using Implyzer;
 
-               namespace ImplTypeCheck {
+               namespace Implyzer {
                    public enum ImplKind {
                        ReferenceType,
                        ValueType

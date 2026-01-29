@@ -1,7 +1,7 @@
 using System;
 // ReSharper disable All
 
-namespace ImplTypeCheck;
+namespace Implyzer;
 
 #nullable enable
 

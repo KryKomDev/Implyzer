@@ -1,9 +1,10 @@
-﻿namespace ImplTypeCheck;
+﻿namespace Implyzer;
 
 internal static class Rules {
     internal static ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => [
         RefVal,
-        Type
+        Type,
+        IndirectImpl
     ];
 
     internal static readonly DiagnosticDescriptor RefVal = new(
@@ -24,5 +25,15 @@ internal static class Rules {
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description:  "Type '{0}' must be implement '{1}' because it is required by interface '{2}'."
+    );
+
+    internal static readonly DiagnosticDescriptor IndirectImpl = new(
+        id: "IMPL0003",
+        title: "Indirect implementation required",
+        messageFormat: "Type '{0}' cannot implement '{1}' directly{2}",
+        category: "Implementation",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Interfaces marked with [IndirectImpl] cannot be implemented directly."
     );
 }
