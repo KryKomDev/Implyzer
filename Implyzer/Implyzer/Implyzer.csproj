@@ -16,6 +16,8 @@
         <Authors>KryKomDev</Authors>
         <Description>A Roslyn analyzer for restraining interface implementations</Description>
         <PackageIcon>Package-Icon.png</PackageIcon>
+        <PackageLicenseUrl>LICENSE.md</PackageLicenseUrl>
+        <PackageReadme>Package-Readme.md</PackageReadme>
         <RepositoryUrl>https://github.com/KryKomDev/Implyzer</RepositoryUrl>
     </PropertyGroup>
 
@@ -54,6 +56,8 @@
 
     <ItemGroup>
         <None Include="../../Assets/Package-Icon.png" Pack="true" PackagePath="" />
+        <None Include="../../Assets/Package-Readme.md" Pack="true" PackagePath="" />
+        <None Include="../../LICENSE.md" Pack="true" PackagePath="" />
     </ItemGroup>
     
     <ItemGroup>

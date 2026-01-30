@@ -8,7 +8,7 @@ internal static class Rules {
     ];
 
     internal static readonly DiagnosticDescriptor RefVal = new(
-        id: "IMPL0001",
+        id: "IMPL001",
         title: "Invalid implementing type",
         messageFormat: "Type '{0}' must be a {1} because it implements interface '{2}' whose implementing types must be {3}",
         category: "Implementation",
@@ -18,7 +18,7 @@ internal static class Rules {
     );
     
     internal static readonly DiagnosticDescriptor Type = new(
-        id: "IMPL0002",
+        id: "IMPL002",
         title: "Invalid implementing type",
         messageFormat: "Type '{0}' must be implement '{1}' because it is required by interface '{2}'",
         category: "Implementation",
@@ -28,7 +28,7 @@ internal static class Rules {
     );
 
     internal static readonly DiagnosticDescriptor IndirectImpl = new(
-        id: "IMPL0003",
+        id: "IMPL003",
         title: "Indirect implementation required",
         messageFormat: "Type '{0}' cannot implement '{1}' directly{2}",
         category: "Implementation",
