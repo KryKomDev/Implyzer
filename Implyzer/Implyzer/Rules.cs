@@ -1,4 +1,7 @@
-﻿namespace Implyzer;
+﻿// Implyzer
+// Copyright (c) KryKom 2026
+
+namespace Implyzer;
 
 internal static class Rules {
     internal static ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => [

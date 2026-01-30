@@ -1,3 +1,6 @@
+// Implyzer
+// Copyright (c) KryKom 2026
+
 namespace Implyzer.Sample;
 
 [ImplType(ImplKind.ReferenceType)]

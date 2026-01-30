@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Implyzer
+// Copyright (c) KryKom 2026
+
+using System;
 
 namespace Implyzer.Sample;
 

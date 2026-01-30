@@ -2,4 +2,5 @@
     <Project Path="Implyzer/Implyzer.Sample/Implyzer.Sample.csproj" />
     <Project Path="Implyzer/Implyzer.Tests/Implyzer.Tests.csproj" />
     <Project Path="Implyzer/Implyzer/Implyzer.csproj" />
+    <Project Path="Implyzer/Implyzer.CodeFixes/Implyzer.CodeFixes.csproj" />
 </Solution>

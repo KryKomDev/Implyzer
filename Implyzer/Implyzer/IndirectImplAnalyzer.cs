@@ -1,3 +1,6 @@
+// Implyzer
+// Copyright (c) KryKom 2026
+
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -28,16 +31,19 @@ public class IndirectImplAnalyzer : DiagnosticAnalyzer {
             foreach (var attribute in namedTypeSymbol.GetAttributes()) {
                 if (attribute.AttributeClass?.Name != nameof(IndirectImplAttribute)) continue;
 
+                var properties = ImmutableDictionary<string, string?>.Empty;
                 var messageExtra = "";
                 if (attribute.ConstructorArguments.Length > 0 && !attribute.ConstructorArguments[0].IsNull) {
                      if (attribute.ConstructorArguments[0].Value is INamedTypeSymbol suggestion) {
                          messageExtra = $", implement '{suggestion.Name}' instead";
+                         properties = properties.Add("Suggestion", suggestion.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
                      }
                 }
 
                 context.ReportDiagnostic(Diagnostic.Create(
                     Rules.IndirectImpl,
                     baseType.GetLocation(),
+                    properties,
                     typeDeclaration.Identifier.Text,
                     namedTypeSymbol.Name,
                     messageExtra

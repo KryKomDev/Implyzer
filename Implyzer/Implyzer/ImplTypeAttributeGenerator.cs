@@ -1,3 +1,6 @@
+// Implyzer
+// Copyright (c) KryKom 2026
+
 using System.IO;
 using System.Reflection;
 using System.Text;

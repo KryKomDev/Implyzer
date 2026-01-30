@@ -1,3 +1,6 @@
+// Implyzer
+// Copyright (c) KryKom 2026
+
 using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Implyzer;
@@ -59,9 +62,12 @@ public class ImplTypeAnalyzer : DiagnosticAnalyzer {
 
         // Check inheritance
         if (!InheritsFrom(namedTypeSymbol, requiredBaseType)) {
+            var properties = ImmutableDictionary<string, string?>.Empty.Add("RequiredBaseType", requiredBaseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+
             context.ReportDiagnostic(Diagnostic.Create(
                 Rules.Type,
                 namedTypeSymbol.Locations[0],
+                properties,
                 namedTypeSymbol.Name,
                 requiredBaseType.Name,
                 interfaceType.Name

@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net5.0;net10.0</TargetFrameworks>
+<!--        <TargetFrameworks>net5.0;net10.0</TargetFrameworks>-->
+        <TargetFramework>net10.0</TargetFramework>
         <LangVersion>14</LangVersion>
         <Nullable>enable</Nullable>
         
@@ -12,10 +13,13 @@
         <ProjectReference Include="..\Implyzer\Implyzer.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </ProjectReference>
+        <ProjectReference Include="..\Implyzer.CodeFixes\Implyzer.CodeFixes.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </ProjectReference>
     </ItemGroup>
     
     <ItemGroup Condition="'$(LocalPackagingTest)' == 'true'">
-        <PackageReference Include="Implyzer" Version="1.0.1" OutputItemType="Analyzer" ReferenceOutputAssembly="false">
+        <PackageReference Include="Implyzer" Version="*" OutputItemType="Analyzer" ReferenceOutputAssembly="false">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
     </ItemGroup>
