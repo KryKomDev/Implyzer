@@ -42,13 +42,13 @@ It allows you to specify whether an interface should be implemented only by `cla
 ### Dotnet CLI
 
 ```bash
-dotnet add package Implyzer --version 1.1.0
+dotnet add package Implyzer
 ```
 
 ### Package Manager Console
 
 ```bash
-NuGet\Install-Package Implyzer -Version 1.1.0
+NuGet\Install-Package Implyzer
 ```
 
 ### File-based Reference

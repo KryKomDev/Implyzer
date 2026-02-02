@@ -18,4 +18,10 @@
  IMPL002 | Implementation | Error    | Implementation base type mismatch.                         
  IMPL003 | Implementation | Error    | Indirect implementation required                           
 
-### Changed Rules
+## Release 1.3
+
+### New Rules
+
+ Rule ID | Category       | Severity | Notes                                                      
+---------|----------------|----------|------------------------------------------------------------
+ IMPL004 | Implementation | Error    | Empty constructor not found in implementation.             

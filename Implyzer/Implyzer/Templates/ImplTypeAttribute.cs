@@ -13,13 +13,21 @@ namespace Implyzer;
 
 #nullable enable
 
-public enum ImplKind {
+internal enum ImplKind {
     ReferenceType,
-    ValueType
+    ValueType,
+    ReferenceTypeNew
 }
 
+/// <summary>
+/// Represents an attribute that specifies the implementation type requirements for an interface.
+/// This attribute is used to enforce that implementations of the decorated interface
+/// must adhere to specific constraints, such as being a reference type, value type,
+/// or inheriting from a specific base type.
+/// The attribute can be applied to interfaces only.
+/// </summary>
 [AttributeUsage(AttributeTargets.Interface)]
-public sealed class ImplTypeAttribute : Attribute {
+internal sealed class ImplTypeAttribute : Attribute {
     public ImplTypeAttribute(ImplKind kind) {
         Kind = kind;
     }

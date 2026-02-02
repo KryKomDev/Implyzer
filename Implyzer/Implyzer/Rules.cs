@@ -7,7 +7,8 @@ internal static class Rules {
     internal static ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => [
         RefVal,
         Type,
-        IndirectImpl
+        IndirectImpl,
+        Constructor
     ];
 
     internal static readonly DiagnosticDescriptor RefVal = new(
@@ -38,5 +39,15 @@ internal static class Rules {
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "Interfaces marked with [IndirectImpl] cannot be implemented directly."
+    );
+
+    internal static readonly DiagnosticDescriptor Constructor = new(
+        id: "IMPL004",
+        title: "Missing parameterless constructor",
+        messageFormat: "Type '{0}' must have a public parameterless constructor because it implements interface '{1}'",
+        category: "Implementation",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Types implementing interfaces with [ImplType(ImplKind.ReferenceTypeNew)] must have a public parameterless constructor."
     );
 }

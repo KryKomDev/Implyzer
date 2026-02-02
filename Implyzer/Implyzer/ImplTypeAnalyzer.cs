@@ -1,6 +1,7 @@
 // Implyzer
 // Copyright (c) KryKom 2026
 
+using System.Linq;
 using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Implyzer;
@@ -18,7 +19,6 @@ public class ImplTypeAnalyzer : DiagnosticAnalyzer {
     private static void AnalyzeSymbol(SymbolAnalysisContext context) {
         var namedTypeSymbol = (INamedTypeSymbol)context.Symbol;
 
-        // Only check classes and structs
         if (namedTypeSymbol.TypeKind != TypeKind.Class && namedTypeSymbol.TypeKind != TypeKind.Struct)
             return;
 
@@ -61,18 +61,20 @@ public class ImplTypeAnalyzer : DiagnosticAnalyzer {
         }
 
         // Check inheritance
-        if (!InheritsFrom(namedTypeSymbol, requiredBaseType)) {
-            var properties = ImmutableDictionary<string, string?>.Empty.Add("RequiredBaseType", requiredBaseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+        if (InheritsFrom(namedTypeSymbol, requiredBaseType)) return;
+        
+        var properties = ImmutableDictionary<string, string?>.Empty
+            .Add("RequiredBaseType", requiredBaseType
+                .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
 
-            context.ReportDiagnostic(Diagnostic.Create(
-                Rules.Type,
-                namedTypeSymbol.Locations[0],
-                properties,
-                namedTypeSymbol.Name,
-                requiredBaseType.Name,
-                interfaceType.Name
-            ));
-        }
+        context.ReportDiagnostic(Diagnostic.Create(
+            Rules.Type,
+            namedTypeSymbol.Locations[0],
+            properties,
+            namedTypeSymbol .Name,
+            requiredBaseType.Name,
+            interfaceType   .Name
+        ));
     }
 
     private static void ValidateRefVal(
@@ -83,11 +85,12 @@ public class ImplTypeAnalyzer : DiagnosticAnalyzer {
     {
         var isReferenceType = intValue == 0;
         var isValueType = intValue == 1;
+        var isValueTypeNew = intValue == 2;
 
         var violation = false;
         var requiredKind = "";
 
-        if (isReferenceType && namedTypeSymbol.TypeKind != TypeKind.Class) {
+        if ((isReferenceType || isValueTypeNew) && namedTypeSymbol.TypeKind != TypeKind.Class) {
             violation = true;
             requiredKind = "reference type (class)";
         }
@@ -103,10 +106,27 @@ public class ImplTypeAnalyzer : DiagnosticAnalyzer {
                 namedTypeSymbol.Name,
                 requiredKind,
                 interfaceType.Name,
-                isReferenceType ? "ReferenceType" : "ValueType");
+                isReferenceType ? "ReferenceType" : (isValueType ? "ValueType" : "ReferenceTypeNew"));
 
             context.ReportDiagnostic(diagnostic);
         }
+
+        if (!isValueTypeNew || violation) return;
+        
+        if (!HasPublicParameterlessConstructor(namedTypeSymbol)) {
+            context.ReportDiagnostic(Diagnostic.Create(
+                Rules.Constructor,
+                namedTypeSymbol.Locations[0],
+                namedTypeSymbol.Name,
+                interfaceType  .Name
+            ));
+        }
+    }
+
+    private static bool HasPublicParameterlessConstructor(INamedTypeSymbol type) {
+        if (type.TypeKind == TypeKind.Struct) return true;
+        return type.InstanceConstructors
+            .Any(c => !c.IsStatic && c.Parameters.Length == 0 && c.DeclaredAccessibility == Accessibility.Public);
     }
 
     private static bool InheritsFrom(INamedTypeSymbol type, INamedTypeSymbol baseType) {
