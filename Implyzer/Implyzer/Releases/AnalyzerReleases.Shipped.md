@@ -22,6 +22,12 @@
 
 ### New Rules
 
- Rule ID | Category       | Severity | Notes                                                      
----------|----------------|----------|------------------------------------------------------------
- IMPL004 | Implementation | Error    | Empty constructor not found in implementation.             
+ Rule ID | Category       | Severity | Notes                                          
+---------|----------------|----------|------------------------------------------------
+ IMPL004 | Implementation | Error    | Empty constructor not found in implementation. 
+
+## Release 1.4
+
+ Rule ID | Category | Severity | Notes                  
+---------|----------|----------|------------------------
+ IMPL005 | Design   | Info     | Use replacement symbol 

@@ -9,10 +9,11 @@ using Microsoft.CodeAnalysis.Text;
 namespace Implyzer;
 
 [Generator]
-public class ImplTypeAttributeGenerator : IIncrementalGenerator {
+public class AttributesGenerator : IIncrementalGenerator {
     public void Initialize(IncrementalGeneratorInitializationContext context) {
         RegisterResource(context, "ImplTypeAttribute");
         RegisterResource(context, "IndirectImplAttribute");
+        RegisterResource(context, "UseInsteadAttribute");
     }
 
     private static void RegisterResource(IncrementalGeneratorInitializationContext context, string name) {

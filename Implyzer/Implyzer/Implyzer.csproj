@@ -9,7 +9,7 @@
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <IsRoslynComponent>true</IsRoslynComponent>
 
-        <PackageVersion>1.3</PackageVersion>
+        <PackageVersion>1.4</PackageVersion>
         
         <RootNamespace>Implyzer</RootNamespace>
         <AssemblyName>Implyzer</AssemblyName>
@@ -17,7 +17,7 @@
         <Description>A Roslyn analyzer for restraining interface implementations</Description>
         <PackageIcon>Package-Icon.png</PackageIcon>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
-        <PackageReadme>Package-Readme.md</PackageReadme>
+        <PackageReadmeFile>Package-Readme.md</PackageReadmeFile>
         <RepositoryUrl>https://github.com/KryKomDev/Implyzer</RepositoryUrl>
     </PropertyGroup>
 
@@ -42,6 +42,7 @@
     <ItemGroup>
         <EmbeddedResource Include="Templates\ImplTypeAttribute.cs"/>
         <EmbeddedResource Include="Templates\IndirectImplAttribute.cs"/>
+        <EmbeddedResource Include="Templates\UseInsteadAttribute.cs"/>
     </ItemGroup>
 
     <ItemGroup>

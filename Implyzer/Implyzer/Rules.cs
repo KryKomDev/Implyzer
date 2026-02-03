@@ -8,7 +8,8 @@ internal static class Rules {
         RefVal,
         Type,
         IndirectImpl,
-        Constructor
+        Constructor,
+        UseInstead
     ];
 
     internal static readonly DiagnosticDescriptor RefVal = new(
@@ -49,5 +50,15 @@ internal static class Rules {
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "Types implementing interfaces with [ImplType(ImplKind.ReferenceTypeNew)] must have a public parameterless constructor."
+    );
+
+    internal static readonly DiagnosticDescriptor UseInstead = new(
+        id: "IMPL005",
+        title: "Use replacement symbol",
+        messageFormat: "Use '{0}' instead of '{1}'",
+        category: "Design",
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        description: "The author of this symbol has suggested a replacement."
     );
 }
