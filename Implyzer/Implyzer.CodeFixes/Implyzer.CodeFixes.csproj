@@ -31,4 +31,9 @@
         <Compile Include="..\Implyzer\Templates\IndirectImplAttribute.cs" Link="Templates\IndirectImplAttribute.cs" />
     </ItemGroup>
 
+    <ItemGroup>
+        <AdditionalFiles Include="..\Implyzer\Releases\AnalyzerReleases.Shipped.md" />
+        <AdditionalFiles Include="..\Implyzer\Releases\AnalyzerReleases.Unshipped.md" />
+    </ItemGroup>
+
 </Project>

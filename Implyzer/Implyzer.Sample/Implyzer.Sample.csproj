@@ -7,6 +7,8 @@
         <Nullable>enable</Nullable>
         
         <LocalPackagingTest>false</LocalPackagingTest>
+        
+        <DefineConstants>$(DefineConstants);IMPLYZER_PUBLIC_ATTRIBUTES</DefineConstants>
     </PropertyGroup>
 
     <ItemGroup Condition="'$(LocalPackagingTest)' == 'false'">
@@ -19,7 +21,7 @@
     </ItemGroup>
     
     <ItemGroup Condition="'$(LocalPackagingTest)' == 'true'">
-        <PackageReference Include="Implyzer" Version="*" OutputItemType="Analyzer" ReferenceOutputAssembly="false">
+        <PackageReference Include="Implyzer" Version="2026.1.0" OutputItemType="Analyzer" ReferenceOutputAssembly="false">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
     </ItemGroup>

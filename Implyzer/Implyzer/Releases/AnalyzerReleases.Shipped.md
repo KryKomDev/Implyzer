@@ -28,6 +28,9 @@
 
 ## Release 1.4
 
+### New Rules
+
  Rule ID | Category | Severity | Notes                  
 ---------|----------|----------|------------------------
  IMPL005 | Design   | Info     | Use replacement symbol 
+ 

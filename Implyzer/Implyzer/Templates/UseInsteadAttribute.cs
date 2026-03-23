@@ -7,6 +7,8 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
+#if !IMPLYZER_DISABLE_ATTRIBUTES
+
 using System;
 using static System.AttributeTargets;
 
@@ -21,7 +23,12 @@ namespace Implyzer;
 /// in the compiler's eyes (though it generates a suggestion diagnostic).
 /// </summary>
 [AttributeUsage(All & ~(ReturnValue | Assembly | GenericParameter | Module | Parameter), Inherited = false, AllowMultiple = false)]
-internal sealed class UseInsteadAttribute : Attribute {
+#if IMPLYZER_PUBLIC_ATTRIBUTES
+public
+#else
+internal
+#endif
+sealed class UseInsteadAttribute : Attribute {
     
     /// <summary>
     /// Initializes a new instance of the <see cref="UseInsteadAttribute"/> class
@@ -70,3 +77,5 @@ internal sealed class UseInsteadAttribute : Attribute {
 }
 
 #nullable restore
+
+#endif

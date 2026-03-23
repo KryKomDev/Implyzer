@@ -7,15 +7,29 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
+#if !IMPLYZER_DISABLE_ATTRIBUTES
+
 using System;
 
 namespace Implyzer;
 
+/// <summary>
+/// Indicates that the decorated interface should not be implemented directly,
+/// but rather using a different interface. This is useful for forcing implementation
+/// of a generic version of an interface instead of a non-generic one.
+/// </summary>
 [AttributeUsage(AttributeTargets.Interface)]
-internal class IndirectImplAttribute : Attribute {
+#if IMPLYZER_PUBLIC_ATTRIBUTES
+public
+#else
+internal 
+#endif
+class IndirectImplAttribute : Attribute {
     public Type ImplementInstead { get; }
     
     public IndirectImplAttribute(Type implementInstead) {
         ImplementInstead = implementInstead;
     }
 }
+
+#endif

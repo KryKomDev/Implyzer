@@ -10,6 +10,7 @@ namespace Implyzer;
 
 [Generator]
 public class AttributesGenerator : IIncrementalGenerator {
+    
     public void Initialize(IncrementalGeneratorInitializationContext context) {
         RegisterResource(context, "ImplTypeAttribute");
         RegisterResource(context, "IndirectImplAttribute");

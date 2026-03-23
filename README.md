@@ -54,7 +54,7 @@ NuGet\Install-Package Implyzer
 ### File-based Reference
 
 ```c#
-#:package Implyzer@1.1.0
+#:package Implyzer
 ```
 
 ## Examples
@@ -151,6 +151,51 @@ public class Generic : IGeneric<int> { }
 // ERROR: Inherits from INotGeneric
 public class NotGeneric : INotGeneric { }
 ```
+
+### 5. Use Instead
+
+Create a suggestion diagnostic when using a method, class etc.
+using `[UseInstead]`
+
+```c#
+[UseInstead(nameof(ShouldBeUsed))]
+public void ShouldNotBeUsed() { ... }
+
+public void ShouldBeUsed() { ... }
+
+void Main() 
+{
+    // creates a suggestion alongside with 
+    // a code fix when using an IDE
+    ShouldNotBeUsed();
+}
+```
+
+## Configuration
+
+### Modifying Attribute Accessibility
+
+In your .csproj add the following line to the `PropertyGroup` section
+to make the attributes public:
+
+```msbuild
+<DefineConstants>$(DefineConstants);IMPLYZER_PUBLIC_ATTRIBUTES</DefineConstants>
+```
+
+### Disabling Attributes
+
+To disable the attributes add the following line to your .csproj:
+
+```msbuild
+<DefineConstants>$(DefineConstants);IMPLYZER_DISABLE_ATTRIBUTES</DefineConstants>
+```
+
+### Working in a Multi-project Solution
+
+If you are importing Implyzer in a multi-project solution where
+the projects are dependent on each other, configure the least dependent
+project to have the attributes public, and disable the attribute generation
+in the other project.
 
 ## How It Works
 
