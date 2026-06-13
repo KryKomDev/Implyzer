@@ -29,7 +29,7 @@ public class IndirectImplAnalyzer : DiagnosticAnalyzer {
                 continue;
 
             foreach (var attribute in namedTypeSymbol.GetAttributes()) {
-                if (attribute.AttributeClass?.Name != nameof(IndirectImplAttribute)) continue;
+                if (attribute.AttributeClass?.Name != "IndirectImplAttribute") continue;
 
                 var properties = ImmutableDictionary<string, string?>.Empty;
                 var messageExtra = "";

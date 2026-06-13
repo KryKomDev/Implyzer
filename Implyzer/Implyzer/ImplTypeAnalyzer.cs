@@ -24,7 +24,7 @@ public class ImplTypeAnalyzer : DiagnosticAnalyzer {
 
         foreach (var interfaceType in namedTypeSymbol.AllInterfaces)
         foreach (var attribute in interfaceType.GetAttributes()) {
-            if (attribute.AttributeClass?.Name != nameof(ImplTypeAttribute)) continue;
+            if (attribute.AttributeClass?.Name != "ImplTypeAttribute") continue;
             if (attribute.ConstructorArguments.Length <= 0) continue;
 
             var arg = attribute.ConstructorArguments[0];

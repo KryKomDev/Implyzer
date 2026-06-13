@@ -32,7 +32,6 @@ public class AttributesGeneratorTests {
         var implTypeText = implTypeTree.ToString();
         Assert.Contains("public enum ImplKind", implTypeText);
         Assert.Contains("public sealed class ImplTypeAttribute", implTypeText);
-        Assert.DoesNotContain("#if IMPLYZER_PUBLIC_ATTRIBUTES", implTypeText);
     }
 
     [Fact]

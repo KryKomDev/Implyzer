@@ -9,7 +9,7 @@
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <IsRoslynComponent>true</IsRoslynComponent>
 
-        <PackageVersion>2026.3</PackageVersion>
+        <PackageVersion>2026.3.1</PackageVersion>
         
         <RootNamespace>Implyzer</RootNamespace>
         <AssemblyName>Implyzer</AssemblyName>
@@ -37,6 +37,10 @@
             <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
             <IncludeAssets>Analyzers</IncludeAssets>
         </ProjectReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile Remove="Templates\**" />
     </ItemGroup>
 
     <ItemGroup>

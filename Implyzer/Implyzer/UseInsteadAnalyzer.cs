@@ -30,7 +30,7 @@ public class UseInsteadAnalyzer : DiagnosticAnalyzer {
         ISymbol? symbol = null;
 
         switch (context.Operation) {
-            case IMemberReferenceOperation memberRef:
+            case IMemberReferenceOperation memberRef: {
                 // If it's a method reference that is part of an invocation, we skip it here
                 // and let the Invocation handle it to avoid potential double reporting or confusion,
                 // BUT Invocation doesn't always have a clear "syntax" for just the method name if we want to be precise.
@@ -43,14 +43,17 @@ public class UseInsteadAnalyzer : DiagnosticAnalyzer {
                 
                 symbol = memberRef.Member;
                 break;
-                
-            case IInvocationOperation invocation:
+            }
+
+            case IInvocationOperation invocation: {
                 symbol = invocation.TargetMethod;
                 break;
+            }
 
-            case IObjectCreationOperation objectCreation:
+            case IObjectCreationOperation objectCreation: {
                 symbol = objectCreation.Constructor;
                 break;
+            }
         }
 
         if (symbol == null) return;
@@ -77,7 +80,7 @@ public class UseInsteadAnalyzer : DiagnosticAnalyzer {
 
     private static bool CheckAttributes(OperationAnalysisContext context, ISymbol symbol) {
         foreach (var attribute in symbol.GetAttributes()) {
-            if (attribute.AttributeClass?.Name != nameof(UseInsteadAttribute)) continue;
+            if (attribute.AttributeClass?.Name != "UseInsteadAttribute") continue;
             
             // We found the attribute. Extract the message.
             if (attribute.ConstructorArguments.Length <= 0) continue;
@@ -138,9 +141,10 @@ public class UseInsteadAnalyzer : DiagnosticAnalyzer {
 
                 break;
             }
-            case { Kind: TypedConstantKind.Primitive, Value: string replacementString }:
+            case { Kind: TypedConstantKind.Primitive, Value: string replacementString }: {
                 replacement = replacementString;
                 break;
+            }
         }
 
         return replacement;
@@ -176,18 +180,23 @@ public class UseInsteadAnalyzer : DiagnosticAnalyzer {
         var syntax = operation.Syntax;
 
         switch (syntax) {
-            case InvocationExpressionSyntax invSyntax:
+            case InvocationExpressionSyntax invSyntax: {
                 switch (invSyntax.Expression) {
-                    case MemberAccessExpressionSyntax memberAccess:
+                    case MemberAccessExpressionSyntax memberAccess: {
                         return memberAccess.Name.GetLocation();
-                    case IdentifierNameSyntax identifier:
+                    }
+                    case IdentifierNameSyntax identifier: {
                         return identifier.GetLocation();
+                    }
                 }
                 break;
-            case ObjectCreationExpressionSyntax creationSyntax:
+            }
+            case ObjectCreationExpressionSyntax creationSyntax: {
                 return creationSyntax.Type.GetLocation();
-            case MemberAccessExpressionSyntax memberAccessSyntax:
+            }
+            case MemberAccessExpressionSyntax memberAccessSyntax: {
                 return memberAccessSyntax.Name.GetLocation();
+            }
         }
 
         return syntax.GetLocation();
