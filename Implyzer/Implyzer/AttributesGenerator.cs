@@ -12,23 +12,27 @@ namespace Implyzer;
 public class AttributesGenerator : IIncrementalGenerator {
     
     public void Initialize(IncrementalGeneratorInitializationContext context) {
-        RegisterResource(context, "ImplTypeAttribute");
-        RegisterResource(context, "IndirectImplAttribute");
-        RegisterResource(context, "UseInsteadAttribute");
+        context.RegisterSourceOutput(context.CompilationProvider, (productionContext, compilation) => {
+            CheckAndRegisterResource(productionContext, compilation, "ImplTypeAttribute",     "Implyzer.ImplTypeAttribute");
+            CheckAndRegisterResource(productionContext, compilation, "IndirectImplAttribute", "Implyzer.IndirectImplAttribute");
+            CheckAndRegisterResource(productionContext, compilation, "UseInsteadAttribute",   "Implyzer.UseInsteadAttribute");
+        });
     }
 
-    private static void RegisterResource(IncrementalGeneratorInitializationContext context, string name) {
-        context.RegisterPostInitializationOutput(ctx => {
-            var assembly     = Assembly.GetExecutingAssembly();
-            var resourceName = $"Implyzer.Templates.{name}.cs";
+    private static void CheckAndRegisterResource(SourceProductionContext context, Compilation compilation, string name, string metadataName) {
+        if (compilation.GetTypeByMetadataName(metadataName) is not null) {
+            return;
+        }
 
-            using var stream = assembly.GetManifestResourceStream(resourceName);
-            if (stream == null) return;
+        var assembly     = Assembly.GetExecutingAssembly();
+        var resourceName = $"Implyzer.Templates.{name}.cs";
 
-            using var reader = new StreamReader(stream);
-            var       source = reader.ReadToEnd();
+        using var stream = assembly.GetManifestResourceStream(resourceName);
+        if (stream == null) return;
 
-            ctx.AddSource($"{name}.g.cs", SourceText.From(source, Encoding.UTF8));
-        });
+        using var reader = new StreamReader(stream);
+        var       source = reader.ReadToEnd();
+
+        context.AddSource($"{name}.g.cs", SourceText.From(source, Encoding.UTF8));
     }
 }

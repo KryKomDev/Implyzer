@@ -173,29 +173,18 @@ void Main()
 
 ## Configuration
 
-### Modifying Attribute Accessibility
-
-In your .csproj add the following line to the `PropertyGroup` section
-to make the attributes public:
-
-```msbuild
-<DefineConstants>$(DefineConstants);IMPLYZER_PUBLIC_ATTRIBUTES</DefineConstants>
-```
-
-### Disabling Attributes
-
-To disable the attributes add the following line to your .csproj:
-
-```msbuild
-<DefineConstants>$(DefineConstants);IMPLYZER_DISABLE_ATTRIBUTES</DefineConstants>
-```
+No manual configuration is required. The generator automatically checks if the attributes
+(`ImplTypeAttribute`, `IndirectImplAttribute`, `UseInsteadAttribute`) are already defined
+in the compilation (either within your own codebase or from a referenced project/assembly).
+If they do not exist, they are generated as `public` by default.
 
 ### Working in a Multi-project Solution
 
-If you are importing Implyzer in a multi-project solution where
-the projects are dependent on each other, configure the least dependent
-project to have the attributes public, and disable the attribute generation
-in the other project.
+If you are importing Implyzer in a multi-project solution, the attributes will only be 
+generated in the projects where they don't already exist. For example, if a project 
+references another project that already generates/declares the attributes, Implyzer will 
+automatically detect this and skip generating them in the referencing project to avoid 
+duplicate type errors.
 
 ## How It Works
 

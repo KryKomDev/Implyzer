@@ -7,8 +7,6 @@
         <Nullable>enable</Nullable>
         
         <LocalPackagingTest>false</LocalPackagingTest>
-        
-        <DefineConstants>$(DefineConstants);IMPLYZER_PUBLIC_ATTRIBUTES</DefineConstants>
     </PropertyGroup>
 
     <ItemGroup Condition="'$(LocalPackagingTest)' == 'false'">

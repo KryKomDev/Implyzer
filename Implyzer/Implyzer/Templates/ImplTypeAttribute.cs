@@ -7,20 +7,13 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-#if !IMPLYZER_DISABLE_ATTRIBUTES
-
 using System;
 
 namespace Implyzer;
 
 #nullable enable
 
-#if IMPLYZER_PUBLIC_ATTRIBUTES
-public
-#else
-internal 
-#endif
-enum ImplKind {
+public enum ImplKind {
     ReferenceType,
     ValueType,
     ReferenceTypeNew
@@ -34,12 +27,7 @@ enum ImplKind {
 /// The attribute can be applied to interfaces only.
 /// </summary>
 [AttributeUsage(AttributeTargets.Interface)]
-#if IMPLYZER_PUBLIC_ATTRIBUTES
-public
-#else
-internal
-#endif
-sealed class ImplTypeAttribute : Attribute {
+public sealed class ImplTypeAttribute : Attribute {
     
     public ImplTypeAttribute(ImplKind kind) {
         Kind = kind;
@@ -55,5 +43,3 @@ sealed class ImplTypeAttribute : Attribute {
 }
 
 #nullable restore
-
-#endif
