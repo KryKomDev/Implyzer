@@ -1,0 +1,12 @@
+- name: Introduction
+  href: introduction.md
+- name: Getting Started
+  href: ../index.md
+- name: Enforce Implementation Kinds
+  href: impl-type.md
+- name: Enforce Indirect Implementation
+  href: indirect-impl.md
+- name: Static Abstract Simulation
+  href: static-abstract.md
+- name: Use Instead Refactoring
+  href: use-instead.md

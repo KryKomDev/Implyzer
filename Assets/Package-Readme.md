@@ -1,7 +1,7 @@
 ﻿# Implyzer
 
-**Implyzer** is a Roslyn source generator and analyzer that enforces implementation constraints on interfaces. 
-It allows you to specify whether an interface should be implemented only by `class`es (reference types) or 
+**Implyzer** is a Roslyn source generator and analyzer that enforces implementation constraints on interfaces.
+It allows you to specify whether an interface should be implemented only by `class`es (reference types) or
 `struct`s (value types), and can even enforce a specific base class.
 
 ## Features
@@ -11,7 +11,7 @@ It allows you to specify whether an interface should be implemented only by `cla
 - **Enforce Indirect Implementation**: Make some interfaces directly unimplementable by classes, while still allowing
   them to be implemented through other interfaces.
 - **Zero-Config**: Works out-of-the-box with standard .NET projects.
-- **Source Generator**: Automatically injects the necessary attributes into your project—no extra dependencies are 
+- **Source Generator**: Automatically injects the necessary attributes into your project—no extra dependencies are
   required at runtime.
 
 ## Installation
@@ -100,7 +100,7 @@ public class DataObject : IData
 
 ### 3. Enforce Base Class
 
-Use `[ImplType(typeof(MyBaseClass))]` to ensure implementing classes inherit from a specific base class. This 
+Use `[ImplType(typeof(MyBaseClass))]` to ensure implementing classes inherit from a specific base class. This
 implicitly enforces `ImplKind.ReferenceType`.
 
 ```csharp
@@ -139,9 +139,9 @@ public class NotGeneric : INotGeneric { }
 
 ## How It Works
 
-1. The package includes a **Source Generator** that adds the `ImplTypeAttribute` and `ImplKind` enum to your 
+1. The package includes a **Source Generator** that adds the `ImplTypeAttribute` and `ImplKind` enum to your
    project automatically.
-2. The **Analyzer** inspects your code at compile-time and reports errors (`IMPL001` for kind mismatch, `IMPL002` 
+2. The **Analyzer** inspects your code at compile-time and reports errors (`IMPL001` for kind mismatch, `IMPL002`
    for base type mismatch) if the constraints are violated.
 
 ## Building from Source

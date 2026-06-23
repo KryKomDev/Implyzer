@@ -1,16 +1,15 @@
-<h1 align="center">Implyzer</h1>
-
-<p align="center">An implementation analyzer for C#.</p>
-
 <div align="center">
-    <p>
-        <img src="https://img.shields.io/github/license/KryKomDev/Implyzer?style=for-the-badge&amp;labelColor=%235F6473&amp;color=%23F2A0A0" alt="GitHub License" />
-        <a href="https://www.nuget.org/packages/Implyzer"><img src="https://img.shields.io/nuget/v/Implyzer?color=F0CA95&amp;style=for-the-badge&amp;labelColor=5F6473" alt="NuGet" /></a>
-        <img src="https://img.shields.io/nuget/dt/Implyzer?color=E3ED8A&amp;style=for-the-badge&amp;labelColor=5F6473" alt="NuGet Downloads" />
-        <img src="https://img.shields.io/github/actions/workflow/status/KryKomDev/Implyzer/test.yml?style=for-the-badge&amp;labelColor=%235F6473&amp;color=%2395EC7D" alt="GitHub Actions Workflow Status" />
-        <img src="https://img.shields.io/badge/.NET-Standard2.0-7ACFDC?style=for-the-badge&amp;labelColor=5F6473" alt=".NET Standard" />
-        <img alt="GitHub Release" src="https://img.shields.io/github/v/release/KryKomDev/Implyzer?include_prereleases&sort=semver&style=for-the-badge&labelColor=5F6473&color=%23cba6f7">
-    </p>
+
+# Implyzer
+
+An implementation analyzer and restraing system for C#.
+
+[![License](https://img.shields.io/github/license/KryKomDev/Implyzer?style=for-the-badge&labelColor=%232a313c&color=%2358a6ff)](https://github.com/KryKomDev/Implyzer/blob/main/LICENSE)
+[![Latest Stable](https://img.shields.io/github/v/release/KryKomDev/Implyzer?sort=semver&style=for-the-badge&label=Latest%20Stable&labelColor=2a313c&color=e051c6)](https://img.shields.io/github/v/release/KryKomDev/Implyzer?sort=semver&style=for-the-badge&label=Latest%20Stable&labelColor=2a313c&color=e051c6)
+[![Latest](https://img.shields.io/github/v/release/KryKomDev/Implyzer?include_prereleases&sort=semver&style=for-the-badge&label=Latest&labelColor=2a313c&color=e051c6)](https://img.shields.io/github/v/release/KryKomDev/Implyzer?include_prereleases&sort=semver&style=for-the-badge&label=Latest&labelColor=2a313c&color=e051c6)
+[![Commits per month](https://img.shields.io/github/commit-activity/m/KryKomDev/Implyzer/main?style=for-the-badge&labelColor=%232a313c&color=%23d69a00)](https://img.shields.io/github/commit-activity/m/KryKomDev/Implyzer/main?style=for-the-badge&labelColor=%232a313c&color=%2358a6ff)
+![NuGet Version](https://img.shields.io/nuget/v/Implyzer?style=for-the-badge&labelColor=2a313c&color=e051c6&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FImplyzer)
+
 </div>
 
 **Implyzer** is a Roslyn source generator and analyzer that enforces implementation constraints on interfaces.
@@ -59,7 +58,7 @@ NuGet\Install-Package Implyzer
 
 ## Examples
 
-All code examples are available in the [Implyzer.Sample](./Implyzer/Implyzer.Sample) project.
+All code examples are available in the [Samples](./Samples) project.
 
 ### 1. Enforce Reference Types (Classes)
 
