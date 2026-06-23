@@ -8,8 +8,8 @@ on:
 
 env:
   SolutionName: ./Implyzer.slnx
-  ProjectPath: ./Implyzer/Implyzer/Implyzer.csproj
-  TestProjectPath: ./Implyzer/Implyzer.Tests/Implyzer.Tests.csproj
+  ProjectPath: ./Src/Implyzer/Implyzer.csproj
+  TestProjectPath: ./Tests/Implyzer.Tests.csproj
   NugetOutputDir: ./nupkg/
 
 permissions:
@@ -50,7 +50,7 @@ jobs:
         name: build-artifacts
         path: |
           ${{ env.NugetOutputDir }}
-          ./Implyzer/Implyzer/bin/Release/netstandard2.0/Implyzer.dll
+          ./Src/Implyzer/bin/Release/netstandard2.0/Implyzer.dll
 
   publish:
     needs: build
@@ -117,5 +117,5 @@ jobs:
       with:
         body: ${{ steps.release_notes.outputs.commits }}
         files: |
-          artifacts/Implyzer/Implyzer/bin/Release/netstandard2.0/Implyzer.dll
+          artifacts/Src/Implyzer/bin/Release/netstandard2.0/Implyzer.dll
           source_code.zip

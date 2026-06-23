@@ -206,6 +206,10 @@ Requirements: .NET 10.0 SDK or later.
    dotnet test
    ```
 
+## Documentation
+
+You can find the full documentation [here](https://krykomdev.github.io/Implyzer/).
+
 ## License
 
 MIT

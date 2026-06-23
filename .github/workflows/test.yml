@@ -5,8 +5,8 @@ on:
     tags-ignore:
       - 'v*'
     paths:
-      - 'Implyzer/**'
-      - 'Implyzer.Tests/**'
+      - 'Src/**'
+      - 'Tests/**'
       - '.github/workflows/test.yml'
   workflow_dispatch:
 
@@ -20,8 +20,8 @@ jobs:
     
     env:
       SolutionName: ./Implyzer.slnx
-      ProjectPath: ./Implyzer/Implyzer/Implyzer.csproj
-      TestProjectPath: ./Implyzer/Implyzer.Tests/Implyzer.Tests.csproj
+      ProjectPath: ./Src/Implyzer/Implyzer.csproj
+      TestProjectPath: ./Tests/Implyzer.Tests.csproj
 
     steps:
       - name: Checkout
