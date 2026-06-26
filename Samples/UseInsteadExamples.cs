@@ -1,6 +1,3 @@
-using System;
-using Implyzer;
-
 namespace Implyzer.Sample;
 
 /// <summary>
@@ -35,6 +32,6 @@ public class Usage {
         var sum = calc.ComputeSum(10, 20);
 
         // Info IMPL005 on class type: "Use 'ModernCalculator' instead of 'LegacyCalculator'"
-        LegacyCalculator legacy = new LegacyCalculator(5);
+        var legacy = new LegacyCalculator(5);
     }
 }

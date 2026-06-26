@@ -184,4 +184,85 @@ public class StaticAbstractAnalyzerTests {
 
         await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
+
+    [Fact]
+    public async Task TestMethodImplementationNullabilityMismatch() {
+        var test =
+            """
+            #nullable enable
+            public delegate bool TryParse<T>(string? input, out T? result);
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), new[] { "TSelf", "T" })]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+            public class {|#0:Color|} : IParser<Color> {
+                // Mismatch: input is 'string' instead of 'string?'
+                public static bool TryParse(string input, out Color? result) {
+                    result = new Color();
+                    return true;
+                }
+            }
+            """;
+
+        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticAbstractMethodNotImplemented.Id)
+                                           .WithLocation(0)
+                                           .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
+
+    [Fact]
+    public async Task TestMethodImplementationParamsMismatch() {
+        var test =
+            """
+            public delegate bool TryParse<T>(string input, out T result, params int[] extra);
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), new[] { "TSelf", "T" })]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+            public class {|#0:Color|} : IParser<Color> {
+                // Mismatch: missing 'params' keyword on extra
+                public static bool TryParse(string input, out Color result, int[] extra) {
+                    result = new Color();
+                    return true;
+                }
+            }
+            """;
+
+        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticAbstractMethodNotImplemented.Id)
+                                           .WithLocation(0)
+                                           .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
+
+    [Fact]
+    public async Task TestMethodImplementationAttributeMismatch() {
+        var test =
+            """
+            using System;
+
+            [AttributeUsage(AttributeTargets.Parameter)]
+            public class CustomAttribute : Attribute {}
+
+            public delegate bool TryParse<T>([Custom] string input, out T result);
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), new[] { "TSelf", "T" })]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+            public class {|#0:Color|} : IParser<Color> {
+                // Mismatch: missing [Custom] attribute on input
+                public static bool TryParse(string input, out Color result) {
+                    result = new Color();
+                    return true;
+                }
+            }
+            """;
+
+        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticAbstractMethodNotImplemented.Id)
+                                           .WithLocation(0)
+                                           .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
 }

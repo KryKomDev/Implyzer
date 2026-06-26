@@ -173,4 +173,54 @@ public class StaticAbstractGeneratorTests {
         Assert.Contains("global::TestNamespace.IParser.G_Register_TryParse", moduleInitializerSource);
         Assert.Contains("typeof(global::TestNamespace.Color)", moduleInitializerSource);
     }
+
+    [Fact]
+    public void TestGeneratorWithAttributesNullabilityAndParams() {
+        const string source =
+            """
+            using System;
+            using System.Diagnostics.CodeAnalysis;
+            using Implyzer;
+
+            namespace TestNamespace {
+                [AttributeUsage(AttributeTargets.Parameter | AttributeTargets.ReturnValue)]
+                public class CustomAttribute : Attribute {}
+
+                public delegate bool TryParse<T>(
+                    [Custom] string? input, 
+                    [NotNullWhen(true)] out T? result,
+                    params int[] extra
+                );
+
+                [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+                public class Color : IParser<Color> {
+                    public static bool TryParse(string? input, [NotNullWhen(true)] out Color? result, params int[] extra) {
+                        result = new Color();
+                        return true;
+                    }
+                }
+            }
+            """;
+
+        var compilation = CreateCompilation(source);
+        var generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver  = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        Assert.Equal(3, runResult.GeneratedTrees.Length);
+
+        var registrySource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("TestNamespace_IParser_Registry.g.cs")).ToString();
+        
+        Assert.Contains("public static bool TryParse<T>([global::TestNamespace.CustomAttribute] string? input, [global::System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out T? result, params int[] extra)", registrySource);
+        Assert.Contains("public static bool TryParse(global::System.Type type, [global::TestNamespace.CustomAttribute] string? input, [global::System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out object? result, params int[] extra)", registrySource);
+
+        var forwardSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("TestNamespace_IParser_Forward.g.cs")).ToString();
+        
+        Assert.Contains("public static bool TryParse([global::TestNamespace.CustomAttribute] string? input, [global::System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out TSelf? result, params int[] extra)", forwardSource);
+    }
 }
+

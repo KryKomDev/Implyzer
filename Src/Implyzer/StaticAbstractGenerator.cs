@@ -11,6 +11,120 @@ namespace Implyzer;
 
 [Generator]
 public class StaticAbstractGenerator : IIncrementalGenerator {
+    private static readonly SymbolDisplayFormat FullyQualifiedFormatWithNullability =
+        SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
+            SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions |
+            SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier
+        );
+
+    private static string FormatAttributes(IEnumerable<AttributeData> attributes, string? typeParamNameToReplace = null) {
+        var formatted = new List<string>();
+        foreach (var attr in attributes) {
+            var formattedAttr = FormatAttribute(attr, typeParamNameToReplace);
+            if (!string.IsNullOrEmpty(formattedAttr)) {
+                formatted.Add(formattedAttr);
+            }
+        }
+        return formatted.Count > 0 ? string.Join(" ", formatted) + " " : "";
+    }
+
+    private static string FormatReturnAttributes(IEnumerable<AttributeData> attributes, string? typeParamNameToReplace = null) {
+        var formatted = new List<string>();
+        foreach (var attr in attributes) {
+            var formattedAttr = FormatAttribute(attr, typeParamNameToReplace);
+            if (!string.IsNullOrEmpty(formattedAttr)) {
+                if (formattedAttr.StartsWith("[") && formattedAttr.EndsWith("]")) {
+                    formattedAttr = "[return: " + formattedAttr.Substring(1);
+                }
+                formatted.Add(formattedAttr);
+            }
+        }
+        return formatted.Count > 0 ? string.Join(" ", formatted) + " " : "";
+    }
+
+    private static string FormatAttribute(AttributeData attribute, string? typeParamNameToReplace = null) {
+        if (attribute.AttributeClass == null)
+            return "";
+
+        var fullName = attribute.AttributeClass.ToDisplayString(FullyQualifiedFormatWithNullability);
+        if (fullName == "global::System.Runtime.CompilerServices.NullableAttribute" || 
+            fullName == "global::System.Runtime.CompilerServices.NullableContextAttribute" ||
+            fullName == "global::System.Runtime.CompilerServices.NullablePublicOnlyAttribute" ||
+            fullName == "global::System.Runtime.CompilerServices.NativeIntegerAttribute" ||
+            fullName == "global::System.Runtime.CompilerServices.DynamicAttribute" ||
+            fullName == "global::System.Runtime.CompilerServices.TupleElementNamesAttribute" ||
+            fullName == "global::System.Runtime.CompilerServices.IsReadOnlyAttribute" ||
+            fullName == "global::System.ParamArrayAttribute" ||
+            fullName == "global::System.Runtime.InteropServices.OutAttribute" ||
+            fullName == "global::System.Runtime.InteropServices.InAttribute") {
+            return "";
+        }
+
+        var args = new List<string>();
+
+        foreach (var arg in attribute.ConstructorArguments) {
+            args.Add(FormatTypedConstant(arg, typeParamNameToReplace));
+        }
+
+        foreach (var namedArg in attribute.NamedArguments) {
+            args.Add($"{namedArg.Key} = {FormatTypedConstant(namedArg.Value, typeParamNameToReplace)}");
+        }
+
+        if (args.Count > 0) {
+            return $"[{fullName}({string.Join(", ", args)})]";
+        }
+
+        return $"[{fullName}]";
+    }
+
+    private static string FormatTypedConstant(TypedConstant constant, string? typeParamNameToReplace) {
+        if (constant.IsNull)
+            return "null";
+
+        if (constant.Kind == TypedConstantKind.Array) {
+            var elements = constant.Values.Select(v => FormatTypedConstant(v, typeParamNameToReplace));
+            var arrayType = (IArrayTypeSymbol)constant.Type!;
+            var elementTypeName = ToNonGenericTypeString(arrayType.ElementType.WithNullableAnnotation(NullableAnnotation.NotAnnotated), typeParamNameToReplace ?? "");
+            return $"new {elementTypeName}[] {{ {string.Join(", ", elements)} }}";
+        }
+
+        if (constant.Kind == TypedConstantKind.Type) {
+            var typeSymbol = (ITypeSymbol)constant.Value!;
+            var typeStr = ToNonGenericTypeString(typeSymbol.WithNullableAnnotation(NullableAnnotation.NotAnnotated), typeParamNameToReplace ?? "");
+            return $"typeof({typeStr})";
+        }
+
+        if (constant.Kind == TypedConstantKind.Enum) {
+            return constant.Type!.ToDisplayString(FullyQualifiedFormatWithNullability) + "." + constant.Value;
+        }
+
+        if (constant.Value is string s) {
+            return Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(s, true);
+        }
+
+        if (constant.Value is char c) {
+            return Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(c, true);
+        }
+
+        if (constant.Value is bool b) {
+            return b ? "true" : "false";
+        }
+
+        if (constant.Value is double d) {
+            return d.ToString(System.Globalization.CultureInfo.InvariantCulture) + "d";
+        }
+
+        if (constant.Value is float f) {
+            return f.ToString(System.Globalization.CultureInfo.InvariantCulture) + "f";
+        }
+
+        if (constant.Value is decimal dec) {
+            return dec.ToString(System.Globalization.CultureInfo.InvariantCulture) + "m";
+        }
+
+        return constant.Value?.ToString() ?? "null";
+    }
+
     public void Initialize(IncrementalGeneratorInitializationContext context) {
         // Collect interfaces with [StaticAbstract] attributes
         var interfaces = context.SyntaxProvider.CreateSyntaxProvider(
@@ -190,8 +304,9 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
             return;
 
         var methodName    = info.MethodName;
-        var castType      = delegateSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        var returnTypeStr = invokeMethod.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var castType      = delegateSymbol.ToDisplayString(FullyQualifiedFormatWithNullability);
+        var returnAttributes = FormatReturnAttributes(invokeMethod.GetReturnTypeAttributes());
+        var returnTypeStr = invokeMethod.ReturnType.ToDisplayString(FullyQualifiedFormatWithNullability);
 
         var typeParams = delegateSymbol.TypeParameters;
 
@@ -210,7 +325,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                 constraints.Add("struct");
 
             foreach (var ct in tp.ConstraintTypes) {
-                constraints.Add(ct.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+                constraints.Add(ct.ToDisplayString(FullyQualifiedFormatWithNullability));
             }
 
             if (tp.HasConstructorConstraint)
@@ -231,10 +346,11 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                         RefKind.Ref => "ref ",
                         RefKind.Out => "out ",
                         RefKind.In  => "in ",
-                        _           => ""
+                        _           => p.IsParams ? "params " : ""
                     };
 
-                    return $"{refKind}{p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} {p.Name}";
+                    var attrs = FormatAttributes(p.GetAttributes());
+                    return $"{attrs}{refKind}{p.Type.ToDisplayString(FullyQualifiedFormatWithNullability)} {p.Name}";
                 }
             )
         );
@@ -280,7 +396,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                         _{{methodName}}Registry[type] = impl;
                     }
                     
-                    public static {{returnTypeStr}} {{methodName}}{{typeParamsStr}}({{paramList}}){{constraintsStr}} {
+                    {{returnAttributes}}public static {{returnTypeStr}} {{methodName}}{{typeParamsStr}}({{paramList}}){{constraintsStr}} {
                         if (_{{methodName}}Registry.TryGetValue(typeof({{lookupTypeName}}), out var impl)) {
             """
         );
@@ -303,6 +419,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
         sb.AppendLine($"            throw new global::System.InvalidOperationException($\"No implementation of {methodName} registered for type {{typeof({lookupTypeName})}}.\");");
         sb.AppendLine($"        }}");
 
+        var nonGenericReturnAttributes = FormatReturnAttributes(invokeMethod.GetReturnTypeAttributes(), lookupTypeName);
         var nonGenericParamListElements = new List<string> { "global::System.Type type" };
         nonGenericParamListElements.AddRange(
             invokeMethod.Parameters.Select(
@@ -311,11 +428,12 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                         RefKind.Ref => "ref ",
                         RefKind.Out => "out ",
                         RefKind.In  => "in ",
-                        _           => ""
+                        _           => p.IsParams ? "params " : ""
                     };
 
+                    var attrs = FormatAttributes(p.GetAttributes(), lookupTypeName);
                     var typeStr = ToNonGenericTypeString(p.Type, lookupTypeName);
-                    return $"{refKind}{typeStr} {p.Name}";
+                    return $"{attrs}{refKind}{typeStr} {p.Name}";
                 }
             )
         );
@@ -337,7 +455,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
         sb.AppendLine();
         sb.AppendLine(
             $$"""
-                    public static {{nonGenericReturnTypeStr}} {{methodName}}({{nonGenericParamList}}) {
+                    {{nonGenericReturnAttributes}}public static {{nonGenericReturnTypeStr}} {{methodName}}({{nonGenericParamList}}) {
                         if (_{{methodName}}Registry.TryGetValue(type, out var impl)) {
                             var args = new object?[] { {{argListWithoutRef}} };
             """
@@ -401,10 +519,11 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                         RefKind.Ref => "ref ",
                         RefKind.Out => "out ",
                         RefKind.In  => "in ",
-                        _           => ""
+                        _           => p.IsParams ? "params " : ""
                     };
 
-                    return $"{refKind}{p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} {p.Name}";
+                    var attrs = FormatAttributes(p.GetAttributes());
+                    return $"{attrs}{refKind}{p.Type.ToDisplayString(FullyQualifiedFormatWithNullability)} {p.Name}";
                 }
             )
         );
@@ -449,10 +568,11 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
 
         var companionTypeArgsStr = companionTypeArgs.Count > 0 ? $"<{string.Join(", ", companionTypeArgs)}>" : "";
 
-        var returnTypeStr     = interfaceInvoke.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        var companionClassFqn = $"{interfaceSymbol.ContainingNamespace.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{interfaceSymbol.Name}";
+        var returnAttributes = FormatReturnAttributes(interfaceInvoke.GetReturnTypeAttributes());
+        var returnTypeStr     = interfaceInvoke.ReturnType.ToDisplayString(FullyQualifiedFormatWithNullability);
+        var companionClassFqn = $"{interfaceSymbol.ContainingNamespace.ToDisplayString(FullyQualifiedFormatWithNullability)}.{interfaceSymbol.Name}";
 
-        sb.AppendLine($"        public static {returnTypeStr} {info.MethodName}({interfaceParamList}) {{");
+        sb.AppendLine($"        {returnAttributes}public static {returnTypeStr} {info.MethodName}({interfaceParamList}) {{");
 
         sb.AppendLine(
             interfaceInvoke.ReturnsVoid 
@@ -518,12 +638,12 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                         continue;
 
                     var registryClassFqn = info.TargetClass != null 
-                        ? info.TargetClass.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) 
+                        ? info.TargetClass.ToDisplayString(FullyQualifiedFormatWithNullability) 
                         : $"{info.InterfaceSymbol.ContainingNamespace
-                            .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{info.InterfaceSymbol.Name}";
+                            .ToDisplayString(FullyQualifiedFormatWithNullability)}.{info.InterfaceSymbol.Name}";
 
-                    var delegateTypeStr = constructedDelegate.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    var methodGroupStr  = $"{type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{info.MethodName}";
+                    var delegateTypeStr = constructedDelegate.ToDisplayString(FullyQualifiedFormatWithNullability);
+                    var methodGroupStr  = $"{type.ToDisplayString(FullyQualifiedFormatWithNullability)}.{info.MethodName}";
 
                     registrationStatements.Add($"            {registryClassFqn}.G_Register_{info.MethodName}(typeof({type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), new {delegateTypeStr}({methodGroupStr}));");
                 }
@@ -563,7 +683,10 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
         if (method.Parameters.Length != delegateInvoke.Parameters.Length)
             return false;
 
-        if (!SymbolEqualityComparer.Default.Equals(method.ReturnType, delegateInvoke.ReturnType))
+        if (!SymbolEqualityComparer.IncludeNullability.Equals(method.ReturnType, delegateInvoke.ReturnType))
+            return false;
+
+        if (!AttributeListsMatch(method.GetReturnTypeAttributes(), delegateInvoke.GetReturnTypeAttributes()))
             return false;
 
         for (int i = 0; i < method.Parameters.Length; i++) {
@@ -573,11 +696,102 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
             if (p1.RefKind != p2.RefKind)
                 return false;
 
-            if (!SymbolEqualityComparer.Default.Equals(p1.Type, p2.Type))
+            if (p1.IsParams != p2.IsParams)
+                return false;
+
+            if (!SymbolEqualityComparer.IncludeNullability.Equals(p1.Type, p2.Type))
+                return false;
+
+            if (!AttributeListsMatch(p1.GetAttributes(), p2.GetAttributes()))
                 return false;
         }
 
         return true;
+    }
+
+    private static bool AttributeListsMatch(ImmutableArray<AttributeData> list1, ImmutableArray<AttributeData> list2) {
+        var filtered1 = list1.Where(a => !IsCompilerInjectedAttribute(a)).ToList();
+        var filtered2 = list2.Where(a => !IsCompilerInjectedAttribute(a)).ToList();
+
+        if (filtered1.Count != filtered2.Count)
+            return false;
+
+        for (int i = 0; i < filtered1.Count; i++) {
+            if (!AttributesAreEqual(filtered1[i], filtered2[i]))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsCompilerInjectedAttribute(AttributeData attribute) {
+        if (attribute.AttributeClass == null)
+            return true;
+
+        var fullName = attribute.AttributeClass.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return fullName == "global::System.Runtime.CompilerServices.NullableAttribute" || 
+               fullName == "global::System.Runtime.CompilerServices.NullableContextAttribute" ||
+               fullName == "global::System.Runtime.CompilerServices.NullablePublicOnlyAttribute" ||
+               fullName == "global::System.Runtime.CompilerServices.NativeIntegerAttribute" ||
+               fullName == "global::System.Runtime.CompilerServices.DynamicAttribute" ||
+               fullName == "global::System.Runtime.CompilerServices.TupleElementNamesAttribute" ||
+               fullName == "global::System.Runtime.CompilerServices.IsReadOnlyAttribute" ||
+               fullName == "global::System.ParamArrayAttribute" ||
+               fullName == "global::System.Runtime.InteropServices.OutAttribute" ||
+               fullName == "global::System.Runtime.InteropServices.InAttribute";
+    }
+
+    private static bool AttributesAreEqual(AttributeData a1, AttributeData a2) {
+        if (!SymbolEqualityComparer.Default.Equals(a1.AttributeClass, a2.AttributeClass))
+            return false;
+
+        if (a1.ConstructorArguments.Length != a2.ConstructorArguments.Length)
+            return false;
+
+        for (int i = 0; i < a1.ConstructorArguments.Length; i++) {
+            if (!TypedConstantsAreEqual(a1.ConstructorArguments[i], a2.ConstructorArguments[i]))
+                return false;
+        }
+
+        if (a1.NamedArguments.Length != a2.NamedArguments.Length)
+            return false;
+
+        foreach (var na1 in a1.NamedArguments) {
+            var match = a2.NamedArguments.FirstOrDefault(na2 => na2.Key == na1.Key);
+            if (match.Key == null || !TypedConstantsAreEqual(na1.Value, match.Value))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool TypedConstantsAreEqual(TypedConstant tc1, TypedConstant tc2) {
+        if (tc1.Kind != tc2.Kind)
+            return false;
+
+        if (tc1.IsNull != tc2.IsNull)
+            return false;
+
+        if (tc1.IsNull)
+            return true;
+
+        if (tc1.Kind == TypedConstantKind.Array) {
+            if (tc1.Values.Length != tc2.Values.Length)
+                return false;
+
+            for (int i = 0; i < tc1.Values.Length; i++) {
+                if (!TypedConstantsAreEqual(tc1.Values[i], tc2.Values[i]))
+                    return false;
+            }
+
+            return true;
+        }
+
+        if (tc1.Kind == TypedConstantKind.Type) {
+            return SymbolEqualityComparer.Default.Equals((ITypeSymbol?)tc1.Value, (ITypeSymbol?)tc2.Value);
+        }
+
+        return Equals(tc1.Value, tc2.Value);
     }
 
     private static StaticAbstractInfo? GetStaticAbstractInfo(AttributeData attribute, INamedTypeSymbol interfaceSymbol, Compilation compilation) {
@@ -721,27 +935,30 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
             return "object?";
         }
         
+        var isNullable = type.NullableAnnotation == NullableAnnotation.Annotated;
+        var suffix = isNullable ? "?" : "";
+
         if (type is INamedTypeSymbol namedType) {
             if (namedType.IsGenericType) {
                 var args = namedType.TypeArguments.Select(a => ToNonGenericTypeString(a, typeParamName));
-                var baseName = namedType.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var baseName = namedType.OriginalDefinition.ToDisplayString(FullyQualifiedFormatWithNullability);
                 var idx = baseName.IndexOf('<');
                 if (idx >= 0) {
                     baseName = baseName.Substring(0, idx);
                 }
-                return $"{baseName}<{string.Join(", ", args)}>";
+                return $"{baseName}<{string.Join(", ", args)}>{suffix}";
             }
         }
         
         if (type is IArrayTypeSymbol arrayType) {
-            return $"{ToNonGenericTypeString(arrayType.ElementType, typeParamName)}[]";
+            return $"{ToNonGenericTypeString(arrayType.ElementType, typeParamName)}[]{suffix}";
         }
         
         if (type is IPointerTypeSymbol pointerType) {
-            return $"{ToNonGenericTypeString(pointerType.PointedAtType, typeParamName)}*";
+            return $"{ToNonGenericTypeString(pointerType.PointedAtType, typeParamName)}*{suffix}";
         }
         
-        return type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return type.ToDisplayString(FullyQualifiedFormatWithNullability);
     }
 
     private class StaticAbstractInfo {

@@ -9,7 +9,7 @@
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <IsRoslynComponent>true</IsRoslynComponent>
 
-        <PackageVersion>2026.4</PackageVersion>
+        <PackageVersion>2026.4.1</PackageVersion>
 
         <RootNamespace>Implyzer</RootNamespace>
         <AssemblyName>Implyzer</AssemblyName>

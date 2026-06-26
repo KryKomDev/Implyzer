@@ -14,6 +14,12 @@ namespace Implyzer;
 
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
+    private static readonly SymbolDisplayFormat FullyQualifiedFormatWithNullability =
+        SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
+            SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions |
+            SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier
+        );
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => Rules.SupportedDiagnostics;
 
     public override void Initialize(AnalysisContext context) {
@@ -136,15 +142,17 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
                     .Any(m => m.IsStatic && m.DeclaredAccessibility == Accessibility.Public && MethodMatchesSignature(m, delegateInvoke));
 
                 if (!matches) {
-                    var returnTypeFqn = delegateInvoke.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    var returnAttributes = FormatReturnAttributes(delegateInvoke.GetReturnTypeAttributes());
+                    var returnTypeFqn = returnAttributes + delegateInvoke.ReturnType.ToDisplayString(FullyQualifiedFormatWithNullability);
                     var paramStrings = delegateInvoke.Parameters.Select(p => {
                         var refKind = p.RefKind switch {
                             RefKind.Ref => "ref ",
                             RefKind.Out => "out ",
                             RefKind.In => "in ",
-                            _ => ""
+                            _ => p.IsParams ? "params " : ""
                         };
-                        return $"{refKind}{p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} {p.Name}";
+                        var attrs = FormatAttributes(p.GetAttributes());
+                        return $"{attrs}{refKind}{p.Type.ToDisplayString(FullyQualifiedFormatWithNullability)} {p.Name}";
                     });
                     var paramsText = string.Join(", ", paramStrings);
 
@@ -173,7 +181,10 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
         if (method.Parameters.Length != delegateInvoke.Parameters.Length)
             return false;
 
-        if (!SymbolEqualityComparer.Default.Equals(method.ReturnType, delegateInvoke.ReturnType))
+        if (!SymbolEqualityComparer.IncludeNullability.Equals(method.ReturnType, delegateInvoke.ReturnType))
+            return false;
+
+        if (!AttributeListsMatch(method.GetReturnTypeAttributes(), delegateInvoke.GetReturnTypeAttributes()))
             return false;
 
         for (int i = 0; i < method.Parameters.Length; i++) {
@@ -183,11 +194,209 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
             if (p1.RefKind != p2.RefKind)
                 return false;
 
-            if (!SymbolEqualityComparer.Default.Equals(p1.Type, p2.Type))
+            if (p1.IsParams != p2.IsParams)
+                return false;
+
+            if (!SymbolEqualityComparer.IncludeNullability.Equals(p1.Type, p2.Type))
+                return false;
+
+            if (!AttributeListsMatch(p1.GetAttributes(), p2.GetAttributes()))
                 return false;
         }
 
         return true;
+    }
+
+    private static bool AttributeListsMatch(ImmutableArray<AttributeData> list1, ImmutableArray<AttributeData> list2) {
+        var filtered1 = list1.Where(a => !IsCompilerInjectedAttribute(a)).ToList();
+        var filtered2 = list2.Where(a => !IsCompilerInjectedAttribute(a)).ToList();
+
+        if (filtered1.Count != filtered2.Count)
+            return false;
+
+        for (int i = 0; i < filtered1.Count; i++) {
+            if (!AttributesAreEqual(filtered1[i], filtered2[i]))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsCompilerInjectedAttribute(AttributeData attribute) {
+        if (attribute.AttributeClass == null)
+            return true;
+
+        var fullName = attribute.AttributeClass.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return fullName == "global::System.Runtime.CompilerServices.NullableAttribute" || 
+               fullName == "global::System.Runtime.CompilerServices.NullableContextAttribute" ||
+               fullName == "global::System.Runtime.CompilerServices.NullablePublicOnlyAttribute" ||
+               fullName == "global::System.Runtime.CompilerServices.NativeIntegerAttribute" ||
+               fullName == "global::System.Runtime.CompilerServices.DynamicAttribute" ||
+               fullName == "global::System.Runtime.CompilerServices.TupleElementNamesAttribute" ||
+               fullName == "global::System.Runtime.CompilerServices.IsReadOnlyAttribute" ||
+               fullName == "global::System.ParamArrayAttribute" ||
+               fullName == "global::System.Runtime.InteropServices.OutAttribute" ||
+               fullName == "global::System.Runtime.InteropServices.InAttribute";
+    }
+
+    private static bool AttributesAreEqual(AttributeData a1, AttributeData a2) {
+        if (!SymbolEqualityComparer.Default.Equals(a1.AttributeClass, a2.AttributeClass))
+            return false;
+
+        if (a1.ConstructorArguments.Length != a2.ConstructorArguments.Length)
+            return false;
+
+        for (int i = 0; i < a1.ConstructorArguments.Length; i++) {
+            if (!TypedConstantsAreEqual(a1.ConstructorArguments[i], a2.ConstructorArguments[i]))
+                return false;
+        }
+
+        if (a1.NamedArguments.Length != a2.NamedArguments.Length)
+            return false;
+
+        foreach (var na1 in a1.NamedArguments) {
+            var match = a2.NamedArguments.FirstOrDefault(na2 => na2.Key == na1.Key);
+            if (match.Key == null || !TypedConstantsAreEqual(na1.Value, match.Value))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool TypedConstantsAreEqual(TypedConstant tc1, TypedConstant tc2) {
+        if (tc1.Kind != tc2.Kind)
+            return false;
+
+        if (tc1.IsNull != tc2.IsNull)
+            return false;
+
+        if (tc1.IsNull)
+            return true;
+
+        if (tc1.Kind == TypedConstantKind.Array) {
+            if (tc1.Values.Length != tc2.Values.Length)
+                return false;
+
+            for (int i = 0; i < tc1.Values.Length; i++) {
+                if (!TypedConstantsAreEqual(tc1.Values[i], tc2.Values[i]))
+                    return false;
+            }
+
+            return true;
+        }
+
+        if (tc1.Kind == TypedConstantKind.Type) {
+            return SymbolEqualityComparer.Default.Equals((ITypeSymbol?)tc1.Value, (ITypeSymbol?)tc2.Value);
+        }
+
+        return Equals(tc1.Value, tc2.Value);
+    }
+
+    private static string FormatAttributes(IEnumerable<AttributeData> attributes) {
+        var formatted = new List<string>();
+        foreach (var attr in attributes) {
+            var formattedAttr = FormatAttribute(attr);
+            if (!string.IsNullOrEmpty(formattedAttr)) {
+                formatted.Add(formattedAttr);
+            }
+        }
+        return formatted.Count > 0 ? string.Join(" ", formatted) + " " : "";
+    }
+
+    private static string FormatReturnAttributes(IEnumerable<AttributeData> attributes) {
+        var formatted = new List<string>();
+        foreach (var attr in attributes) {
+            var formattedAttr = FormatAttribute(attr);
+            if (!string.IsNullOrEmpty(formattedAttr)) {
+                if (formattedAttr.StartsWith("[") && formattedAttr.EndsWith("]")) {
+                    formattedAttr = "[return: " + formattedAttr.Substring(1);
+                }
+                formatted.Add(formattedAttr);
+            }
+        }
+        return formatted.Count > 0 ? string.Join(" ", formatted) + " " : "";
+    }
+
+    private static string FormatAttribute(AttributeData attribute) {
+        if (attribute.AttributeClass == null)
+            return "";
+
+        var fullName = attribute.AttributeClass.ToDisplayString(FullyQualifiedFormatWithNullability);
+        if (fullName == "global::System.Runtime.CompilerServices.NullableAttribute" || 
+            fullName == "global::System.Runtime.CompilerServices.NullableContextAttribute" ||
+            fullName == "global::System.Runtime.CompilerServices.NullablePublicOnlyAttribute" ||
+            fullName == "global::System.Runtime.CompilerServices.NativeIntegerAttribute" ||
+            fullName == "global::System.Runtime.CompilerServices.DynamicAttribute" ||
+            fullName == "global::System.Runtime.CompilerServices.TupleElementNamesAttribute" ||
+            fullName == "global::System.Runtime.CompilerServices.IsReadOnlyAttribute" ||
+            fullName == "global::System.ParamArrayAttribute" ||
+            fullName == "global::System.Runtime.InteropServices.OutAttribute" ||
+            fullName == "global::System.Runtime.InteropServices.InAttribute") {
+            return "";
+        }
+
+        var args = new List<string>();
+
+        foreach (var arg in attribute.ConstructorArguments) {
+            args.Add(FormatTypedConstant(arg));
+        }
+
+        foreach (var namedArg in attribute.NamedArguments) {
+            args.Add($"{namedArg.Key} = {FormatTypedConstant(namedArg.Value)}");
+        }
+
+        if (args.Count > 0) {
+            return $"[{fullName}({string.Join(", ", args)})]";
+        }
+
+        return $"[{fullName}]";
+    }
+
+    private static string FormatTypedConstant(TypedConstant constant) {
+        if (constant.IsNull)
+            return "null";
+
+        if (constant.Kind == TypedConstantKind.Array) {
+            var elements = constant.Values.Select(FormatTypedConstant);
+            var arrayType = (IArrayTypeSymbol)constant.Type!;
+            var elementTypeName = arrayType.ElementType.ToDisplayString(FullyQualifiedFormatWithNullability);
+            return $"new {elementTypeName}[] {{ {string.Join(", ", elements)} }}";
+        }
+
+        if (constant.Kind == TypedConstantKind.Type) {
+            var typeSymbol = (ITypeSymbol)constant.Value!;
+            return $"typeof({typeSymbol.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString(FullyQualifiedFormatWithNullability)})";
+        }
+
+        if (constant.Kind == TypedConstantKind.Enum) {
+            return constant.Type!.ToDisplayString(FullyQualifiedFormatWithNullability) + "." + constant.Value;
+        }
+
+        if (constant.Value is string s) {
+            return Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(s, true);
+        }
+
+        if (constant.Value is char c) {
+            return Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(c, true);
+        }
+
+        if (constant.Value is bool b) {
+            return b ? "true" : "false";
+        }
+
+        if (constant.Value is double d) {
+            return d.ToString(System.Globalization.CultureInfo.InvariantCulture) + "d";
+        }
+
+        if (constant.Value is float f) {
+            return f.ToString(System.Globalization.CultureInfo.InvariantCulture) + "f";
+        }
+
+        if (constant.Value is decimal dec) {
+            return dec.ToString(System.Globalization.CultureInfo.InvariantCulture) + "m";
+        }
+
+        return constant.Value?.ToString() ?? "null";
     }
 
     private static bool IsPartial(INamedTypeSymbol symbol) {
