@@ -18,9 +18,13 @@
     </ItemGroup>
 
     <ItemGroup Condition="'$(LocalPackagingTest)' == 'true'">
-        <PackageReference Include="Implyzer" Version="2026.1.0" OutputItemType="Analyzer" ReferenceOutputAssembly="false">
+        <PackageReference Include="Implyzer" Version="2026.4.1" OutputItemType="Analyzer" ReferenceOutputAssembly="false">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SampleLib\SampleLib.csproj" />
     </ItemGroup>
 
 </Project>

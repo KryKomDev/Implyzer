@@ -84,7 +84,7 @@ public class UseInsteadAnalyzer : DiagnosticAnalyzer {
     }
 
     private static bool CheckAttributes(OperationAnalysisContext context, ISymbol symbol) {
-        foreach (var attribute in symbol.GetAttributes()) {
+        foreach (var attribute in symbol.OriginalDefinition.GetAttributes()) {
             if (attribute.AttributeClass?.Name != "UseInsteadAttribute")
                 continue;
 

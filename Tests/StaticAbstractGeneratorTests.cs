@@ -222,5 +222,107 @@ public class StaticAbstractGeneratorTests {
         
         Assert.Contains("public static bool TryParse([global::TestNamespace.CustomAttribute] string? input, [global::System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out TSelf? result, params int[] extra)", forwardSource);
     }
+
+    [Fact]
+    public void TestGeneratorWithMetadataInterface() {
+        const string librarySource =
+            """
+            using System;
+            using System.Collections.Generic;
+
+            namespace Implyzer {
+                [AttributeUsage(AttributeTargets.Interface, AllowMultiple = true)]
+                public class StaticAbstractAttribute : Attribute {
+                    public string MethodName { get; }
+                    public Type Signature { get; }
+                    public Dictionary<string, string> TypeParams { get; }
+                    public Type? TargetClass { get; }
+
+                    public StaticAbstractAttribute(string methodName, Type signature, params string[] typeParams) {
+                        MethodName = methodName;
+                        Signature = signature;
+                        TypeParams = ToDictionary(typeParams);
+                        TargetClass = null;
+                    }
+
+                    public StaticAbstractAttribute(string methodName, Type signature, Type targetClass, params string[] typeParams) {
+                        MethodName = methodName;
+                        Signature = signature;
+                        TypeParams = ToDictionary(typeParams);
+                        TargetClass = targetClass;
+                    }
+
+                    private static Dictionary<string, string> ToDictionary(string[] array) {
+                        var dict = new Dictionary<string, string>();
+                        if (array != null) {
+                            for (int i = 0; i < array.Length; i += 2) {
+                                if (i + 1 < array.Length) {
+                                    dict[array[i]] = array[i + 1];
+                                }
+                            }
+                        }
+                        return dict;
+                    }
+                }
+            }
+
+            namespace LibraryNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+
+                [Implyzer.StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+            }
+            """;
+
+        // Compile library to MetadataReference
+        var librarySyntaxTree = CSharpSyntaxTree.ParseText(librarySource);
+        var libraryCompilation = CSharpCompilation.Create(
+            "LibraryAssembly",
+            [librarySyntaxTree],
+            [CorlibReference, SystemReference, ComponentModelReference],
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
+
+        using var ms = new MemoryStream();
+        var emitResult = libraryCompilation.Emit(ms);
+        Assert.True(emitResult.Success, string.Join("\n", emitResult.Diagnostics.Select(d => d.ToString())));
+        ms.Seek(0, SeekOrigin.Begin);
+        var libraryReference = MetadataReference.CreateFromStream(ms);
+
+        // Compile Main Assembly referencing LibraryAssembly
+        const string mainSource =
+            """
+            using LibraryNamespace;
+
+            namespace TestNamespace {
+                public class Color : IParser<Color> {
+                    public static bool TryParse(string input, out Color result) {
+                        result = new Color();
+                        return true;
+                    }
+                }
+            }
+            """;
+
+        var mainSyntaxTree = CSharpSyntaxTree.ParseText(mainSource);
+        var compilation = CSharpCompilation.Create(
+            "TestAssembly",
+            [mainSyntaxTree],
+            [CorlibReference, SystemReference, ComponentModelReference, libraryReference],
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
+
+        var generator = new StaticAbstractGenerator();
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        // Should generate StaticAbstractRegistry
+        Assert.Contains("StaticAbstractRegistry.g.cs", runResult.GeneratedTrees.Select(t => Path.GetFileName(t.FilePath)));
+
+        var moduleInitializerSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("StaticAbstractRegistry.g.cs")).ToString();
+        Assert.Contains("global::LibraryNamespace.IParser.G_Register_TryParse", moduleInitializerSource);
+        Assert.Contains("typeof(global::TestNamespace.Color)", moduleInitializerSource);
+    }
 }
 

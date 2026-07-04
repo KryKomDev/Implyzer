@@ -157,7 +157,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
         if (symbol is null)
             return null;
 
-        if (symbol.GetAttributes().Any(a => a.AttributeClass?.Name == "StaticAbstractAttribute" || a.AttributeClass?.Name == "StaticAbstract")) {
+        if (symbol.OriginalDefinition.GetAttributes().Any(a => a.AttributeClass?.Name == "StaticAbstractAttribute" || a.AttributeClass?.Name == "StaticAbstract")) {
             return symbol;
         }
 
@@ -181,7 +181,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
         var allInfos          = new List<StaticAbstractInfo>();
 
         foreach (var iface in ifaces.Distinct(SymbolEqualityComparer.Default).Cast<INamedTypeSymbol>()) {
-            foreach (var attr in iface.GetAttributes()) {
+            foreach (var attr in iface.OriginalDefinition.GetAttributes()) {
                 var info = GetStaticAbstractInfo(attr, iface, compilation);
 
                 if (info == null)
@@ -305,7 +305,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
 
         var methodName    = info.MethodName;
         var castType      = delegateSymbol.ToDisplayString(FullyQualifiedFormatWithNullability);
-        var returnAttributes = FormatReturnAttributes(invokeMethod.GetReturnTypeAttributes());
+        var returnAttributes = FormatReturnAttributes(invokeMethod.OriginalDefinition.GetReturnTypeAttributes());
         var returnTypeStr = invokeMethod.ReturnType.ToDisplayString(FullyQualifiedFormatWithNullability);
 
         var typeParams = delegateSymbol.TypeParameters;
@@ -349,7 +349,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                         _           => p.IsParams ? "params " : ""
                     };
 
-                    var attrs = FormatAttributes(p.GetAttributes());
+                    var attrs = FormatAttributes(p.OriginalDefinition.GetAttributes());
                     return $"{attrs}{refKind}{p.Type.ToDisplayString(FullyQualifiedFormatWithNullability)} {p.Name}";
                 }
             )
@@ -419,7 +419,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
         sb.AppendLine($"            throw new global::System.InvalidOperationException($\"No implementation of {methodName} registered for type {{typeof({lookupTypeName})}}.\");");
         sb.AppendLine($"        }}");
 
-        var nonGenericReturnAttributes = FormatReturnAttributes(invokeMethod.GetReturnTypeAttributes(), lookupTypeName);
+        var nonGenericReturnAttributes = FormatReturnAttributes(invokeMethod.OriginalDefinition.GetReturnTypeAttributes(), lookupTypeName);
         var nonGenericParamListElements = new List<string> { "global::System.Type type" };
         nonGenericParamListElements.AddRange(
             invokeMethod.Parameters.Select(
@@ -431,7 +431,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                         _           => p.IsParams ? "params " : ""
                     };
 
-                    var attrs = FormatAttributes(p.GetAttributes(), lookupTypeName);
+                    var attrs = FormatAttributes(p.OriginalDefinition.GetAttributes(), lookupTypeName);
                     var typeStr = ToNonGenericTypeString(p.Type, lookupTypeName);
                     return $"{attrs}{refKind}{typeStr} {p.Name}";
                 }
@@ -522,7 +522,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                         _           => p.IsParams ? "params " : ""
                     };
 
-                    var attrs = FormatAttributes(p.GetAttributes());
+                    var attrs = FormatAttributes(p.OriginalDefinition.GetAttributes());
                     return $"{attrs}{refKind}{p.Type.ToDisplayString(FullyQualifiedFormatWithNullability)} {p.Name}";
                 }
             )
@@ -568,7 +568,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
 
         var companionTypeArgsStr = companionTypeArgs.Count > 0 ? $"<{string.Join(", ", companionTypeArgs)}>" : "";
 
-        var returnAttributes = FormatReturnAttributes(interfaceInvoke.GetReturnTypeAttributes());
+        var returnAttributes = FormatReturnAttributes(interfaceInvoke.OriginalDefinition.GetReturnTypeAttributes());
         var returnTypeStr     = interfaceInvoke.ReturnType.ToDisplayString(FullyQualifiedFormatWithNullability);
         var companionClassFqn = $"{interfaceSymbol.ContainingNamespace.ToDisplayString(FullyQualifiedFormatWithNullability)}.{interfaceSymbol.Name}";
 
@@ -596,7 +596,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                 continue;
 
             foreach (var iface in type.AllInterfaces) {
-                foreach (var attribute in iface.GetAttributes()) {
+                foreach (var attribute in iface.OriginalDefinition.GetAttributes()) {
                     var info = GetStaticAbstractInfo(attribute, iface, compilation);
 
                     if (info == null)
@@ -686,7 +686,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
         if (!SymbolEqualityComparer.IncludeNullability.Equals(method.ReturnType, delegateInvoke.ReturnType))
             return false;
 
-        if (!AttributeListsMatch(method.GetReturnTypeAttributes(), delegateInvoke.GetReturnTypeAttributes()))
+        if (!AttributeListsMatch(method.OriginalDefinition.GetReturnTypeAttributes(), delegateInvoke.OriginalDefinition.GetReturnTypeAttributes()))
             return false;
 
         for (int i = 0; i < method.Parameters.Length; i++) {
@@ -702,7 +702,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
             if (!SymbolEqualityComparer.IncludeNullability.Equals(p1.Type, p2.Type))
                 return false;
 
-            if (!AttributeListsMatch(p1.GetAttributes(), p2.GetAttributes()))
+            if (!AttributeListsMatch(p1.OriginalDefinition.GetAttributes(), p2.OriginalDefinition.GetAttributes()))
                 return false;
         }
 

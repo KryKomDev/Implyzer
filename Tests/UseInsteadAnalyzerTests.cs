@@ -501,4 +501,73 @@ public class UseInsteadAnalyzerTests {
 
         await VerifyCSUseInsteadFix.VerifyCodeFixAsync(CreateTestSource(test), CreateTestSource(fixtest), expected);
     }
+
+    [Fact]
+    public async Task TestMetadataGenericClassMember() {
+        const string librarySource = 
+            """
+            using System;
+
+            namespace Implyzer {
+                [AttributeUsage(AttributeTargets.All)]
+                public class UseInsteadAttribute : Attribute {
+                    public Type? ReplacementType { get; set; }
+                    public string? MemberName { get; set; }
+                    public Type[]? ParameterTypes { get; set; }
+                    public string? ReplacementString { get; set; }
+
+                    public UseInsteadAttribute(string replacement) {
+                        ReplacementString = replacement;
+                    }
+                }
+            }
+
+            namespace LibraryNamespace {
+                public class GenericClass<T> {
+                    [Implyzer.UseInstead("BetterMethod")]
+                    public void OldMethod() {}
+                }
+            }
+            """;
+
+        var testCode =
+            """
+            using LibraryNamespace;
+
+            namespace TestNamespace {
+                public class Usage {
+                    public void Run() {
+                        var obj = new GenericClass<int>();
+                        obj.{|#0:OldMethod|}();
+                    }
+                }
+            }
+            """;
+
+        var test = new CSharpAnalyzerTest<UseInsteadAnalyzer, DefaultVerifier> {
+            TestCode = testCode
+        };
+
+        test.SolutionTransforms.Add((solution, projectId) => {
+            var libProjectId = Microsoft.CodeAnalysis.ProjectId.CreateNewId("LibraryProject");
+            solution = solution.AddProject(libProjectId, "LibraryProject", "LibraryProject", Microsoft.CodeAnalysis.LanguageNames.CSharp);
+            var mainProject = solution.GetProject(projectId)!;
+            var libProject = solution.GetProject(libProjectId)!
+                .WithMetadataReferences(mainProject.MetadataReferences)
+                .WithCompilationOptions(mainProject.CompilationOptions!)
+                .WithParseOptions(((Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)mainProject.ParseOptions!).WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
+            solution = libProject.Solution;
+            var docId = Microsoft.CodeAnalysis.DocumentId.CreateNewId(libProjectId);
+            solution = solution.AddDocument(docId, "Library.cs", librarySource);
+            return solution.AddProjectReference(projectId, new Microsoft.CodeAnalysis.ProjectReference(libProjectId));
+        });
+
+        var expected = VerifyCSUseInstead.Diagnostic(Rules.UseInstead.Id)
+                                         .WithLocation(0)
+                                         .WithArguments("BetterMethod", "OldMethod");
+
+        test.ExpectedDiagnostics.Add(expected);
+
+        await test.RunAsync();
+    }
 }

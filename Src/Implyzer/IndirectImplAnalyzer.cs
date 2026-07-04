@@ -29,7 +29,7 @@ public class IndirectImplAnalyzer : DiagnosticAnalyzer {
             if (typeSymbol is not INamedTypeSymbol namedTypeSymbol || namedTypeSymbol.TypeKind != TypeKind.Interface)
                 continue;
 
-            foreach (var attribute in namedTypeSymbol.GetAttributes()) {
+            foreach (var attribute in namedTypeSymbol.OriginalDefinition.GetAttributes()) {
                 if (attribute.AttributeClass?.Name != "IndirectImplAttribute")
                     continue;
 

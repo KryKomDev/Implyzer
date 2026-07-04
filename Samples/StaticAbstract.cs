@@ -6,19 +6,26 @@ namespace Implyzer.Sample;
 /// <summary>
 /// Represents a signature for a static abstract method.
 /// </summary>
-public delegate bool TryParse<T>(string input, [NotNullWhen(true)] out T? result);
+public delegate bool TryParse<T>([NotNullWhen(true)] string? input, [MaybeNullWhen(false)] out T result);
+
+/// <summary>
+/// Represents a delegate for parsing a string input into an object of the specified type.
+/// </summary>
+/// <typeparam name="T">The type of the object to be parsed from the string input.</typeparam>
+public delegate T Parse<T>([NotNullWhen(true)] string? input);
 
 /// <summary>
 /// Illustrates [StaticAbstract]. Simulates C# 11 static abstract interface members.
 /// Implyzer generates static companion helper class IParser to route static calls to registered implementations.
-/// </summary>
+/// </summary>public delegate bool TryParse<T>([NotNullWhen(true)] string? input, [MaybeNullWhen(false)] out T result);
 [StaticAbstract("TryParse", typeof(TryParse<>), "TSelf", "T")]
-public partial interface ICustomParsable<TSelf> where TSelf : ICustomParsable<TSelf>;
+[StaticAbstract("Parse",    typeof(Parse<>),    "TSelf", "T")]
+public partial interface ICustomParsable<TSelf> where TSelf : ICustomParsable<TSelf>?;
 
 // VALID: True implements ICustomParsable<True> and provides the matching static method.
 public class True : ICustomParsable<True> {
     
-    public static bool TryParse(string input, [NotNullWhen(true)] out True? result) {
+    public static bool TryParse([NotNullWhen(true)] string? input, [MaybeNullWhen(false)] out True result) {
         if (input == "true") {
             result = new True();
             return true;
@@ -28,13 +35,18 @@ public class True : ICustomParsable<True> {
         return false;
     }
     
+    public static True Parse([NotNullWhen(true)] string? input) => 
+        TryParse(input, out var result)
+            ? result 
+            : throw new ArgumentException();
+    
     public override string ToString() => "true";
 }
 
 // VALID: False implements ICustomParsable<False> and provides the matching static method.
 public class False : ICustomParsable<False> {
     
-    public static bool TryParse(string input, [NotNullWhen(true)] out False? result) {
+    public static bool TryParse([NotNullWhen(true)] string? input, [MaybeNullWhen(false)] out False result) {
         if (input == "false") {
             result = new False();
             return true;
@@ -43,6 +55,11 @@ public class False : ICustomParsable<False> {
         result = null;
         return false;
     }
+    
+    public static False Parse([NotNullWhen(true)] string? input) => 
+        TryParse(input, out var result)
+            ? result 
+            : throw new ArgumentException();
     
     public override string ToString() => "false";
 }

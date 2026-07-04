@@ -396,6 +396,327 @@
               sibling.textContent = text.substring(match[0].length);
             }
           })();
+
+          // Reworked API layout logic
+          (function() {
+            const isReworked = {{#_reworkedApiLayout}}true{{/_reworkedApiLayout}}{{^_reworkedApiLayout}}false{{/_reworkedApiLayout}};
+            if (!isReworked) return;
+
+            window.reworkedApiLayout = true;
+            window.appName = "{{_appName}}";
+
+            let originalArticleHtml = '';
+
+            function renderNamespacesLandingPage() {
+              const article = document.querySelector('article');
+              if (!article) return;
+
+              article.setAttribute('data-landing-rendered', 'true');
+              article.innerHTML = `
+                <h1 class="text-break">Namespaces</h1>
+                <div class="markdown level0 summary">Select a namespace to explore its classes and structs.</div>
+                <div class="namespaces-table-container mt-4">
+                  <table class="table table-bordered table-striped table-condensed">
+                    <thead>
+                      <tr>
+                        <th style="width: 35%">Namespace</th>
+                        <th style="width: 25%">Types</th>
+                        <th style="width: 40%">Description</th>
+                      </tr>
+                    </thead>
+                    <tbody id="namespaces-table-body">
+                      <tr>
+                        <td colspan="3" class="text-center text-secondary py-4">
+                          <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                          Loading namespaces...
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              `;
+
+              const tocRelMeta = document.querySelector('meta[name="docfx:tocrel"]');
+              if (!tocRelMeta) return;
+
+              const tocUrl = tocRelMeta.getAttribute('content').replace('.html', '.json');
+              const pageDir = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+              const jsonUrl = pageDir + tocUrl;
+
+              fetch(jsonUrl)
+                .then(res => res.json())
+                .then(tocData => {
+                  const tbody = document.getElementById('namespaces-table-body');
+                  if (!tbody) return;
+
+                  if (!tocData.items || tocData.items.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="3" class="text-center text-secondary py-3">No namespaces found.</td></tr>`;
+                    return;
+                  }
+
+                  tbody.innerHTML = '';
+                  
+                  tocData.items.forEach(item => {
+                    if (item.type !== 'Namespace') return;
+
+                    const row = document.createElement('tr');
+                    
+                    const nameCell = document.createElement('td');
+                    nameCell.innerHTML = `<a href="${item.href}" class="xref">${item.name}</a>`;
+                    row.appendChild(nameCell);
+
+                    const typesCell = document.createElement('td');
+                    const counts = {};
+                    if (item.items) {
+                      item.items.forEach(child => {
+                        const type = child.type || 'Other';
+                        counts[type] = (counts[type] || 0) + 1;
+                      });
+                    }
+                    
+                    const countsHtml = Object.entries(counts)
+                      .map(([type, count]) => {
+                        let badgeClass = 'bg-secondary-subtle text-secondary-emphasis';
+                        if (type === 'Class') badgeClass = 'bg-primary-subtle text-primary-emphasis';
+                        else if (type === 'Struct') badgeClass = 'bg-info-subtle text-info-emphasis';
+                        else if (type === 'Interface') badgeClass = 'bg-success-subtle text-success-emphasis';
+                        else if (type === 'Enum') badgeClass = 'bg-warning-subtle text-warning-emphasis';
+
+                        return `<span class="badge ${badgeClass} me-1 mb-1">${type}: ${count}</span>`;
+                      })
+                      .join('');
+                    
+                    typesCell.innerHTML = countsHtml || '<span class="text-secondary">-</span>';
+                    row.appendChild(typesCell);
+
+                    const descCell = document.createElement('td');
+                    descCell.className = 'ns-desc text-secondary';
+                    descCell.innerHTML = `<em>Loading description...</em>`;
+                    row.appendChild(descCell);
+
+                    tbody.appendChild(row);
+
+                    fetch(pageDir + item.href)
+                      .then(r => r.text())
+                      .then(htmlText => {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(htmlText, 'text/html');
+                        const summaryEl = doc.querySelector('.markdown.level0.summary');
+                        const summaryHtml = summaryEl ? summaryEl.innerHTML.trim() : '';
+                        descCell.innerHTML = summaryHtml || '<span class="text-secondary">-</span>';
+                      })
+                      .catch(() => {
+                        descCell.innerHTML = '<span class="text-secondary">-</span>';
+                      });
+                  });
+                })
+                .catch(() => {
+                  const tbody = document.getElementById('namespaces-table-body');
+                  if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger py-3">Failed to load namespaces.</td></tr>`;
+                  }
+                });
+            }
+
+            function reworkToc() {
+              const tocNav = document.getElementById('toc');
+              if (!tocNav) return;
+
+              const rootUl = tocNav.querySelector('ul');
+              if (!rootUl) return;
+
+              let activeEl = tocNav.querySelector('.active');
+              if (!activeEl) {
+                const currentPath = window.location.pathname;
+                const filename = currentPath.substring(currentPath.lastIndexOf('/') + 1);
+                if (filename) {
+                  const links = tocNav.querySelectorAll('a');
+                  for (const link of links) {
+                    const href = link.getAttribute('href');
+                    if (href && (href === filename || href.endsWith('/' + filename))) {
+                      activeEl = link;
+                      break;
+                    }
+                  }
+                }
+              }
+
+              if (!activeEl) {
+                if (window.location.hash === '#namespaces') {
+                  document.body.classList.add('landing-page');
+                }
+                return;
+              }
+
+              let activeNamespaceLi = null;
+              let parentLi = activeEl.closest('li');
+              while (parentLi) {
+                const parentUl = parentLi.parentElement;
+                if (parentUl === rootUl) {
+                  activeNamespaceLi = parentLi;
+                  break;
+                }
+                parentLi = parentUl.closest('li');
+              }
+
+              if (activeNamespaceLi) {
+                const originalNsLink = activeNamespaceLi.querySelector('a');
+                const nsHref = originalNsLink ? originalNsLink.getAttribute('href') : '';
+                const nsName = originalNsLink ? originalNsLink.textContent.trim() : '';
+
+                const subUl = activeNamespaceLi.querySelector('ul');
+                if (subUl) {
+                  const children = Array.from(subUl.children);
+                  rootUl.innerHTML = '';
+
+                  if (nsHref && nsName) {
+                    const nsLi = document.createElement('li');
+                    const nsA = document.createElement('a');
+                    nsA.setAttribute('href', nsHref);
+                    nsA.textContent = nsName;
+
+                    const currentPath = window.location.pathname;
+                    const filename = currentPath.substring(currentPath.lastIndexOf('/') + 1);
+                    if (nsHref === filename || nsHref.endsWith('/' + filename)) {
+                      nsA.className = 'active';
+                      nsLi.className = 'active';
+                    }
+
+                    nsLi.appendChild(nsA);
+                    rootUl.appendChild(nsLi);
+                  }
+
+                  children.forEach(child => {
+                    rootUl.appendChild(child);
+                  });
+                  rootUl.className = 'nav level1';
+                }
+              }
+            }
+
+            function handleLayout() {
+              const article = document.querySelector('article');
+              if (!article) return;
+
+              if (!originalArticleHtml) {
+                originalArticleHtml = article.innerHTML;
+              }
+
+              const isApiPage = window.location.pathname.includes('/api/');
+              const isLanding = window.location.hash === '#namespaces';
+
+              if (isApiPage) {
+                if (isLanding) {
+                  document.body.classList.add('landing-page');
+                  renderNamespacesLandingPage();
+                } else {
+                  document.body.classList.remove('landing-page');
+                  if (article.getAttribute('data-landing-rendered') === 'true') {
+                    article.innerHTML = originalArticleHtml;
+                    article.removeAttribute('data-landing-rendered');
+                  }
+                  reworkToc();
+                }
+              }
+            }
+
+            function observeToc() {
+              const tocNav = document.getElementById('toc');
+              if (!tocNav) return;
+
+              if (tocNav.querySelector('ul')) {
+                reworkToc();
+              }
+
+              const observer = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                  if (mutation.addedNodes.length > 0 && tocNav.querySelector('ul')) {
+                    reworkToc();
+                    observer.disconnect();
+                    break;
+                  }
+                }
+              });
+
+              observer.observe(tocNav, { childList: true, subtree: true });
+            }
+
+            function initNavbarRewrite() {
+              const relMeta = document.querySelector('meta[name="docfx:rel"]');
+              const relPath = relMeta ? relMeta.getAttribute('content') : '';
+              
+              fetch(relPath + 'toc.json')
+                .then(res => res.json())
+                .then(rootToc => {
+                  if (!rootToc.items) return;
+                  
+                  const apiItem = rootToc.items.find(item => item.tocHref && item.tocHref.includes('api/toc.html'));
+                  if (!apiItem) return;
+                  
+                  const targetHref = apiItem.href;
+                  
+                  const checkNavbar = setInterval(() => {
+                    const navbar = document.getElementById('navbar');
+                    if (navbar) {
+                      const links = navbar.querySelectorAll('a');
+                      links.forEach(link => {
+                        let href = link.getAttribute('href');
+                        if (href) {
+                          const normHref = href.replace(/\\/g, '/');
+                          const normTarget = targetHref.replace(/\\/g, '/');
+                          if (normHref.endsWith(normTarget)) {
+                            link.setAttribute('href', href + '#namespaces');
+                            clearInterval(checkNavbar);
+                          }
+                        }
+                      });
+                    }
+                  }, 50);
+                  
+                  setTimeout(() => clearInterval(checkNavbar), 5000);
+                })
+                .catch(() => {
+                  const navbar = document.getElementById('navbar');
+                  if (navbar) {
+                    const links = navbar.querySelectorAll('a');
+                    links.forEach(link => {
+                      const href = link.getAttribute('href');
+                      if (href && href.includes('/api/') && !href.includes('#')) {
+                        link.setAttribute('href', href + '#namespaces');
+                      }
+                    });
+                  }
+                });
+            }
+
+            function observeBreadcrumbs() {
+              const breadcrumb = document.getElementById('breadcrumb');
+              if (!breadcrumb) return;
+
+              const rewriteBreadcrumb = () => {
+                const links = breadcrumb.querySelectorAll('a');
+                links.forEach(link => {
+                  const href = link.getAttribute('href');
+                  if (href && href.includes('/api/') && !href.includes('#')) {
+                    link.setAttribute('href', href + '#namespaces');
+                  }
+                });
+              };
+
+              rewriteBreadcrumb();
+
+              const observer = new MutationObserver(rewriteBreadcrumb);
+              observer.observe(breadcrumb, { childList: true, subtree: true });
+            }
+
+            // Run initializations
+            initNavbarRewrite();
+            observeBreadcrumbs();
+            observeToc();
+            handleLayout();
+
+            window.addEventListener('hashchange', handleLayout);
+          })();
         });
       </script>
 

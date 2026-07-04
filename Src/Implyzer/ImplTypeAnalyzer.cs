@@ -23,7 +23,7 @@ public class ImplTypeAnalyzer : DiagnosticAnalyzer {
             return;
 
         foreach (var interfaceType in namedTypeSymbol.AllInterfaces)
-        foreach (var attribute in interfaceType.GetAttributes()) {
+        foreach (var attribute in interfaceType.OriginalDefinition.GetAttributes()) {
             if (attribute.AttributeClass?.Name != "ImplTypeAttribute")
                 continue;
 

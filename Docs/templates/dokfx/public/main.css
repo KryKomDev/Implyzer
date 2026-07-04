@@ -1712,3 +1712,29 @@ footer a:hover {
 [data-bs-theme="dark"] .theme-light-img {
   display: none !important;
 }
+
+/* Reworked API Layout styles */
+body.landing-page:not([data-search])[data-layout=""]>main>.toc-offcanvas,
+body.landing-page:not([data-search])[data-layout="conceptual"]>main>.toc-offcanvas,
+body.landing-page:not([data-search])[data-layout=""]>main>.affix,
+body.landing-page:not([data-search])[data-layout="conceptual"]>main>.affix,
+body.landing-page > main > .toc-offcanvas,
+body.landing-page > main > .affix {
+  display: none !important;
+}
+
+body.landing-page:not([data-search])[data-layout=""]>main>.content,
+body.landing-page:not([data-search])[data-layout="conceptual"]>main>.content,
+body.landing-page > main > .content {
+  margin-left: 0 !important;
+  flex-grow: 1 !important;
+  max-width: 100% !important;
+}
+
+body.landing-page .actionbar {
+  display: none !important;
+}
+
+body.landing-page .content > * {
+  max-width: 1000px !important;
+}

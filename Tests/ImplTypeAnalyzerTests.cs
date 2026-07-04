@@ -249,4 +249,140 @@ public class ImplTypeAnalyzerTests {
 
         await VerifyCS.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
+
+    [Fact]
+    public async Task TestMetadataGenericInterface() {
+        const string librarySource = 
+            """
+            using System;
+
+            namespace Implyzer {
+                public enum ImplKind {
+                    ReferenceType,
+                    ValueType,
+                    ReferenceTypeNew
+                }
+
+                [AttributeUsage(AttributeTargets.Interface)]
+                public class ImplTypeAttribute : Attribute {
+                    public ImplKind Kind { get; }
+                    public Type? BaseType { get; }
+
+                    public ImplTypeAttribute(ImplKind kind) {
+                        Kind = kind;
+                    }
+
+                    public ImplTypeAttribute(Type baseType) {
+                        Kind = ImplKind.ReferenceType;
+                        BaseType = baseType;
+                    }
+                }
+            }
+
+            namespace LibraryNamespace {
+                [Implyzer.ImplType(Implyzer.ImplKind.ValueType)]
+                public interface ITest<T> {}
+            }
+            """;
+
+        var testCode =
+            """
+            using LibraryNamespace;
+
+            namespace TestNamespace {
+                public struct TestStruct : ITest<int> {}
+            }
+            """;
+
+        var test = new CSharpAnalyzerTest<ImplTypeAnalyzer, DefaultVerifier> {
+            TestCode = testCode
+        };
+
+        test.SolutionTransforms.Add((solution, projectId) => {
+            var libProjectId = Microsoft.CodeAnalysis.ProjectId.CreateNewId("LibraryProject");
+            solution = solution.AddProject(libProjectId, "LibraryProject", "LibraryProject", Microsoft.CodeAnalysis.LanguageNames.CSharp);
+            var mainProject = solution.GetProject(projectId)!;
+            var libProject = solution.GetProject(libProjectId)!
+                .WithMetadataReferences(mainProject.MetadataReferences)
+                .WithCompilationOptions(mainProject.CompilationOptions!)
+                .WithParseOptions(((Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)mainProject.ParseOptions!).WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
+            solution = libProject.Solution;
+            var docId = Microsoft.CodeAnalysis.DocumentId.CreateNewId(libProjectId);
+            solution = solution.AddDocument(docId, "Library.cs", librarySource);
+            return solution.AddProjectReference(projectId, new Microsoft.CodeAnalysis.ProjectReference(libProjectId));
+        });
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task TestMetadataGenericInterfaceInvalid() {
+        const string librarySource = 
+            """
+            using System;
+
+            namespace Implyzer {
+                public enum ImplKind {
+                    ReferenceType,
+                    ValueType,
+                    ReferenceTypeNew
+                }
+
+                [AttributeUsage(AttributeTargets.Interface)]
+                public class ImplTypeAttribute : Attribute {
+                    public ImplKind Kind { get; }
+                    public Type? BaseType { get; }
+
+                    public ImplTypeAttribute(ImplKind kind) {
+                        Kind = kind;
+                    }
+
+                    public ImplTypeAttribute(Type baseType) {
+                        Kind = ImplKind.ReferenceType;
+                        BaseType = baseType;
+                    }
+                }
+            }
+
+            namespace LibraryNamespace {
+                [Implyzer.ImplType(Implyzer.ImplKind.ValueType)]
+                public interface ITest<T> {}
+            }
+            """;
+
+        var testCode =
+            """
+            using LibraryNamespace;
+
+            namespace TestNamespace {
+                public class {|#0:TestClass|} : ITest<int> {}
+            }
+            """;
+
+        var test = new CSharpAnalyzerTest<ImplTypeAnalyzer, DefaultVerifier> {
+            TestCode = testCode
+        };
+
+        test.SolutionTransforms.Add((solution, projectId) => {
+            var libProjectId = Microsoft.CodeAnalysis.ProjectId.CreateNewId("LibraryProject");
+            solution = solution.AddProject(libProjectId, "LibraryProject", "LibraryProject", Microsoft.CodeAnalysis.LanguageNames.CSharp);
+            var mainProject = solution.GetProject(projectId)!;
+            var libProject = solution.GetProject(libProjectId)!
+                .WithMetadataReferences(mainProject.MetadataReferences)
+                .WithCompilationOptions(mainProject.CompilationOptions!)
+                .WithParseOptions(((Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)mainProject.ParseOptions!).WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
+            solution = libProject.Solution;
+            var docId = Microsoft.CodeAnalysis.DocumentId.CreateNewId(libProjectId);
+            solution = solution.AddDocument(docId, "Library.cs", librarySource);
+            return solution.AddProjectReference(projectId, new Microsoft.CodeAnalysis.ProjectReference(libProjectId));
+        });
+
+        var expected = VerifyCS.Diagnostic(Rules.RefVal.Id)
+                               .WithLocation(0)
+                               .WithArguments("TestClass", "value type (struct)", "ITest", "ValueType");
+
+        test.ExpectedDiagnostics.Add(expected);
+
+        await test.RunAsync();
+    }
 }

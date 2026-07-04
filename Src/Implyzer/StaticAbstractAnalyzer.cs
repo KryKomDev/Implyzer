@@ -101,7 +101,7 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
 
     private static void AnalyzeImplementingType(SymbolAnalysisContext context, INamedTypeSymbol typeSymbol) {
         foreach (var iface in typeSymbol.AllInterfaces) {
-            foreach (var attribute in iface.GetAttributes()) {
+            foreach (var attribute in iface.OriginalDefinition.GetAttributes()) {
                 var info = GetStaticAbstractInfo(attribute, context.Compilation);
 
                 if (info == null)
@@ -142,7 +142,7 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
                     .Any(m => m.IsStatic && m.DeclaredAccessibility == Accessibility.Public && MethodMatchesSignature(m, delegateInvoke));
 
                 if (!matches) {
-                    var returnAttributes = FormatReturnAttributes(delegateInvoke.GetReturnTypeAttributes());
+                    var returnAttributes = FormatReturnAttributes(delegateInvoke.OriginalDefinition.GetReturnTypeAttributes());
                     var returnTypeFqn = returnAttributes + delegateInvoke.ReturnType.ToDisplayString(FullyQualifiedFormatWithNullability);
                     var paramStrings = delegateInvoke.Parameters.Select(p => {
                         var refKind = p.RefKind switch {
@@ -151,7 +151,7 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
                             RefKind.In => "in ",
                             _ => p.IsParams ? "params " : ""
                         };
-                        var attrs = FormatAttributes(p.GetAttributes());
+                        var attrs = FormatAttributes(p.OriginalDefinition.GetAttributes());
                         return $"{attrs}{refKind}{p.Type.ToDisplayString(FullyQualifiedFormatWithNullability)} {p.Name}";
                     });
                     var paramsText = string.Join(", ", paramStrings);
@@ -184,7 +184,7 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
         if (!SymbolEqualityComparer.IncludeNullability.Equals(method.ReturnType, delegateInvoke.ReturnType))
             return false;
 
-        if (!AttributeListsMatch(method.GetReturnTypeAttributes(), delegateInvoke.GetReturnTypeAttributes()))
+        if (!AttributeListsMatch(method.OriginalDefinition.GetReturnTypeAttributes(), delegateInvoke.OriginalDefinition.GetReturnTypeAttributes()))
             return false;
 
         for (int i = 0; i < method.Parameters.Length; i++) {
@@ -200,7 +200,7 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
             if (!SymbolEqualityComparer.IncludeNullability.Equals(p1.Type, p2.Type))
                 return false;
 
-            if (!AttributeListsMatch(p1.GetAttributes(), p2.GetAttributes()))
+            if (!AttributeListsMatch(p1.OriginalDefinition.GetAttributes(), p2.OriginalDefinition.GetAttributes()))
                 return false;
         }
 

@@ -1,14 +1,14 @@
 <Solution>
     <Folder Name="/Src/">
-        <Project Path="Src/Implyzer/Implyzer.csproj"/>
-        <Project Path="Src/Implyzer.CodeFixes/Implyzer.CodeFixes.csproj"/>
+        <Project Path="Src/Implyzer/Implyzer.csproj" />
+        <Project Path="Src/Implyzer.CodeFixes/Implyzer.CodeFixes.csproj" />
     </Folder>
     
     <Folder Name="/Tests/">
-        <Project Path="Tests/Implyzer.Tests.csproj"/>
+        <Project Path="Tests/Implyzer.Tests.csproj" />
     </Folder>
     
     <Folder Name="/Samples/">
-        <Project Path="Samples/Implyzer.Sample.csproj"/>
+        <Project Path="Samples/Implyzer.Sample.csproj" />
     </Folder>
 </Solution>
