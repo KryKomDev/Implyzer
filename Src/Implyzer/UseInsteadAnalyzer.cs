@@ -97,6 +97,7 @@ public class UseInsteadAnalyzer : DiagnosticAnalyzer {
             replacement = attribute.ConstructorArguments.Length switch {
                 // Case 1: [UseInstead(typeof(Type), "Member")] or [UseInstead(typeof(Type), new[] { typeof(P1) })]
                 2 => Replacement(attribute, replacement),
+
                 // Case 2: [UseInstead(typeof(Type))] or [UseInstead("String")]
                 1 => ExtractReplacementInfo(attribute, replacement),
                 _ => replacement

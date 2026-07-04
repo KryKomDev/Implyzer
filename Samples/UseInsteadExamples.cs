@@ -5,7 +5,6 @@ namespace Implyzer.Sample;
 /// suggesting alternative APIs/classes/methods/constructors/properties to developers,
 /// complete with automated Code Fix support in modern IDEs.
 /// </summary>
-
 [UseInstead(typeof(ModernCalculator))]
 public class LegacyCalculator {
     [UseInstead(nameof(Add))]

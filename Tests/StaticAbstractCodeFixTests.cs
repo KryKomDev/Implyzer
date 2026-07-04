@@ -12,13 +12,22 @@ public static class VerifyStaticAbstractCodeFix {
             TestCode  = source,
             FixedCode = fixedSource
         };
-        test.SolutionTransforms.Add((solution, projectId) => {
-            var project = solution.GetProject(projectId);
-            if (project == null) return solution;
-            var parseOptions = project.ParseOptions as Microsoft.CodeAnalysis.CSharp.CSharpParseOptions;
-            if (parseOptions == null) return solution;
-            return solution.WithProjectParseOptions(projectId, parseOptions.WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
-        });
+
+        test.SolutionTransforms.Add(
+            (solution, projectId) => {
+                var project = solution.GetProject(projectId);
+
+                if (project == null)
+                    return solution;
+
+                var parseOptions = project.ParseOptions as Microsoft.CodeAnalysis.CSharp.CSharpParseOptions;
+
+                if (parseOptions == null)
+                    return solution;
+
+                return solution.WithProjectParseOptions(projectId, parseOptions.WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
+            }
+        );
 
         test.ExpectedDiagnostics.AddRange(expected);
         await test.RunAsync();
@@ -95,8 +104,8 @@ public class StaticAbstractCodeFixTests {
             """;
 
         var expected = VerifyStaticAbstractCodeFix.Diagnostic(Rules.StaticAbstractInterfaceNotPartial.Id)
-                                                  .WithLocation(0)
-                                                  .WithArguments("IParser");
+            .WithLocation(0)
+            .WithArguments("IParser");
 
         await VerifyStaticAbstractCodeFix.VerifyCodeFixAsync(CreateTestSource(test), CreateTestSource(fixedTest), expected);
     }
@@ -124,8 +133,8 @@ public class StaticAbstractCodeFixTests {
             """;
 
         var expected = VerifyStaticAbstractCodeFix.Diagnostic(Rules.StaticAbstractTargetClassNotPartial.Id)
-                                                  .WithLocation(0)
-                                                  .WithArguments("Registry");
+            .WithLocation(0)
+            .WithArguments("Registry");
 
         await VerifyStaticAbstractCodeFix.VerifyCodeFixAsync(CreateTestSource(test), CreateTestSource(fixedTest), expected);
     }
@@ -155,8 +164,8 @@ public class StaticAbstractCodeFixTests {
             """;
 
         var expected = VerifyStaticAbstractCodeFix.Diagnostic(Rules.StaticAbstractMethodNotImplemented.Id)
-                                                  .WithLocation(0)
-                                                  .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
+            .WithLocation(0)
+            .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
 
         await VerifyStaticAbstractCodeFix.VerifyCodeFixAsync(CreateTestSource(test), CreateTestSource(fixedTest), expected);
     }

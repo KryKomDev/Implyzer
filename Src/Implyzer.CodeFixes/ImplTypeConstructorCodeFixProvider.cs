@@ -24,11 +24,12 @@ public class ImplTypeConstructorCodeFixProvider : CodeFixProvider {
             var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken);
             var node = root?.FindNode(diagnostic.Location.SourceSpan);
 
-            if (node is not ClassDeclarationSyntax classDecl)
+            if (node is not TypeDeclarationSyntax typeDecl ||
+                (typeDecl.Kind() != SyntaxKind.ClassDeclaration && typeDecl.Kind() != SyntaxKind.RecordDeclaration))
                 continue;
 
             // Check if we need to add a constructor or make an existing one public
-            var ctor = classDecl.Members.OfType<ConstructorDeclarationSyntax>()
+            var ctor = typeDecl.Members.OfType<ConstructorDeclarationSyntax>()
                 .FirstOrDefault(
                     c => c.ParameterList.Parameters.Count == 0 && !c.Modifiers
                         .Any(m => m.IsKind(SyntaxKind.StaticKeyword))
@@ -41,7 +42,7 @@ public class ImplTypeConstructorCodeFixProvider : CodeFixProvider {
             context.RegisterCodeFix(
                 CodeAction.Create(
                     title,
-                    c => FixConstructorAsync(context.Document, classDecl, ctor, c),
+                    c => FixConstructorAsync(context.Document, typeDecl, ctor, c),
                     title
                 ),
                 diagnostic
@@ -51,7 +52,7 @@ public class ImplTypeConstructorCodeFixProvider : CodeFixProvider {
 
     private static async Task<Document> FixConstructorAsync(
         Document                      document,
-        ClassDeclarationSyntax        classDecl,
+        TypeDeclarationSyntax         typeDecl,
         ConstructorDeclarationSyntax? existingCtor,
         CancellationToken             cancellationToken
     ) {
@@ -60,7 +61,7 @@ public class ImplTypeConstructorCodeFixProvider : CodeFixProvider {
         if (root == null)
             return document;
 
-        ClassDeclarationSyntax newClassDecl;
+        TypeDeclarationSyntax newTypeDecl;
 
         if (existingCtor != null) {
             var newModifiers = existingCtor.Modifiers
@@ -75,25 +76,25 @@ public class ImplTypeConstructorCodeFixProvider : CodeFixProvider {
                 newModifiers.Insert(0, SyntaxFactory.Token(SyntaxKind.PublicKeyword));
 
             var newCtor = existingCtor.WithModifiers(SyntaxFactory.TokenList(newModifiers));
-            newClassDecl = classDecl.ReplaceNode(existingCtor, newCtor);
+            newTypeDecl = typeDecl.ReplaceNode(existingCtor, newCtor);
         }
         else {
-            var newCtor = SyntaxFactory.ConstructorDeclaration(classDecl.Identifier)
+            var newCtor = SyntaxFactory.ConstructorDeclaration(typeDecl.Identifier)
                 .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
                 .WithBody(SyntaxFactory.Block());
 
-            var firstCtor = classDecl.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
+            var firstCtor = typeDecl.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
 
             if (firstCtor != null) {
-                newClassDecl = classDecl.InsertNodesBefore(firstCtor, [newCtor]);
+                newTypeDecl = typeDecl.InsertNodesBefore(firstCtor, [newCtor]);
             }
             else {
-                var newMembers = classDecl.Members.Insert(0, newCtor);
-                newClassDecl = classDecl.WithMembers(newMembers);
+                var newMembers = typeDecl.Members.Insert(0, newCtor);
+                newTypeDecl = typeDecl.WithMembers(newMembers);
             }
         }
 
-        var newRoot = root.ReplaceNode(classDecl, newClassDecl);
+        var newRoot = root.ReplaceNode(typeDecl, newTypeDecl);
 
         return document.WithSyntaxRoot(newRoot);
     }

@@ -7,13 +7,13 @@ using Xunit;
 namespace Implyzer.Tests;
 
 public class StaticAbstractGeneratorTests {
-    private static readonly MetadataReference CorlibReference = MetadataReference.CreateFromFile(typeof(object).Assembly.Location);
-    private static readonly MetadataReference SystemReference = MetadataReference.CreateFromFile(typeof(System.Collections.Generic.Dictionary<,>).Assembly.Location);
+    private static readonly MetadataReference CorlibReference         = MetadataReference.CreateFromFile(typeof(object).Assembly.Location);
+    private static readonly MetadataReference SystemReference         = MetadataReference.CreateFromFile(typeof(System.Collections.Generic.Dictionary<,>).Assembly.Location);
     private static readonly MetadataReference ComponentModelReference = MetadataReference.CreateFromFile(typeof(System.ComponentModel.EditorBrowsableAttribute).Assembly.Location);
 
     private static Compilation CreateCompilation(string source) {
         // Add the StaticAbstractAttribute definition to the compilation
-        const string attributeSource = 
+        const string attributeSource =
             """
             using System;
             using System.Collections.Generic;
@@ -94,9 +94,9 @@ public class StaticAbstractGeneratorTests {
             }
             """;
 
-        var compilation = CreateCompilation(source);
-        var generator   = new StaticAbstractGenerator();
-        GeneratorDriver driver  = CSharpGeneratorDriver.Create(generator);
+        var             compilation = CreateCompilation(source);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
 
         driver = driver.RunGenerators(compilation);
         var runResult = driver.GetRunResult();
@@ -106,18 +106,18 @@ public class StaticAbstractGeneratorTests {
 
         var fileNames = runResult.GeneratedTrees.Select(t => Path.GetFileName(t.FilePath)).ToList();
         Assert.Contains("TestNamespace_ParserRegistry_Registry.g.cs", fileNames);
-        Assert.Contains("StaticAbstractRegistry.g.cs",                 fileNames);
+        Assert.Contains("StaticAbstractRegistry.g.cs",                fileNames);
 
         var registrySource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("TestNamespace_ParserRegistry_Registry.g.cs")).ToString();
-        Assert.Contains("public partial class ParserRegistry", registrySource);
+        Assert.Contains("public partial class ParserRegistry",                                                                                                   registrySource);
         Assert.Contains("private static readonly global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Delegate> _TryParseRegistry", registrySource);
-        Assert.Contains("public static void G_Register_TryParse", registrySource);
-        Assert.Contains("public static bool TryParse<T>(string input, out T result)", registrySource);
-        Assert.Contains("public static bool TryParse(global::System.Type type, string input, out object? result)", registrySource);
+        Assert.Contains("public static void G_Register_TryParse",                                                                                                registrySource);
+        Assert.Contains("public static bool TryParse<T>(string input, out T result)",                                                                            registrySource);
+        Assert.Contains("public static bool TryParse(global::System.Type type, string input, out object? result)",                                               registrySource);
 
         var moduleInitializerSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("StaticAbstractRegistry.g.cs")).ToString();
         Assert.Contains("global::TestNamespace.ParserRegistry.G_Register_TryParse", moduleInitializerSource);
-        Assert.Contains("typeof(global::TestNamespace.Color)", moduleInitializerSource);
+        Assert.Contains("typeof(global::TestNamespace.Color)",                      moduleInitializerSource);
     }
 
     [Fact]
@@ -142,9 +142,9 @@ public class StaticAbstractGeneratorTests {
             }
             """;
 
-        var compilation = CreateCompilation(source);
-        var generator   = new StaticAbstractGenerator();
-        GeneratorDriver driver  = CSharpGeneratorDriver.Create(generator);
+        var             compilation = CreateCompilation(source);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
 
         driver = driver.RunGenerators(compilation);
         var runResult = driver.GetRunResult();
@@ -158,20 +158,20 @@ public class StaticAbstractGeneratorTests {
         Assert.Contains("StaticAbstractRegistry.g.cs",         fileNames);
 
         var registrySource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("TestNamespace_IParser_Registry.g.cs")).ToString();
-        Assert.Contains("public static partial class IParser", registrySource);
+        Assert.Contains("public static partial class IParser",                                                                                                   registrySource);
         Assert.Contains("private static readonly global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Delegate> _TryParseRegistry", registrySource);
-        Assert.Contains("public static void G_Register_TryParse", registrySource);
-        Assert.Contains("public static bool TryParse<T>(string input, out T result)", registrySource);
-        Assert.Contains("public static bool TryParse(global::System.Type type, string input, out object? result)", registrySource);
+        Assert.Contains("public static void G_Register_TryParse",                                                                                                registrySource);
+        Assert.Contains("public static bool TryParse<T>(string input, out T result)",                                                                            registrySource);
+        Assert.Contains("public static bool TryParse(global::System.Type type, string input, out object? result)",                                               registrySource);
 
         var forwardSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("TestNamespace_IParser_Forward.g.cs")).ToString();
-        Assert.Contains("public partial interface IParser<TSelf>", forwardSource);
-        Assert.Contains("public static bool TryParse(string input, out TSelf result)", forwardSource);
+        Assert.Contains("public partial interface IParser<TSelf>",                          forwardSource);
+        Assert.Contains("public static bool TryParse(string input, out TSelf result)",      forwardSource);
         Assert.Contains("global::TestNamespace.IParser.TryParse<TSelf>(input, out result)", forwardSource);
 
         var moduleInitializerSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("StaticAbstractRegistry.g.cs")).ToString();
         Assert.Contains("global::TestNamespace.IParser.G_Register_TryParse", moduleInitializerSource);
-        Assert.Contains("typeof(global::TestNamespace.Color)", moduleInitializerSource);
+        Assert.Contains("typeof(global::TestNamespace.Color)",               moduleInitializerSource);
     }
 
     [Fact]
@@ -204,9 +204,9 @@ public class StaticAbstractGeneratorTests {
             }
             """;
 
-        var compilation = CreateCompilation(source);
-        var generator   = new StaticAbstractGenerator();
-        GeneratorDriver driver  = CSharpGeneratorDriver.Create(generator);
+        var             compilation = CreateCompilation(source);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
 
         driver = driver.RunGenerators(compilation);
         var runResult = driver.GetRunResult();
@@ -214,12 +214,12 @@ public class StaticAbstractGeneratorTests {
         Assert.Equal(3, runResult.GeneratedTrees.Length);
 
         var registrySource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("TestNamespace_IParser_Registry.g.cs")).ToString();
-        
-        Assert.Contains("public static bool TryParse<T>([global::TestNamespace.CustomAttribute] string? input, [global::System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out T? result, params int[] extra)", registrySource);
+
+        Assert.Contains("public static bool TryParse<T>([global::TestNamespace.CustomAttribute] string? input, [global::System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out T? result, params int[] extra)",                             registrySource);
         Assert.Contains("public static bool TryParse(global::System.Type type, [global::TestNamespace.CustomAttribute] string? input, [global::System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out object? result, params int[] extra)", registrySource);
 
         var forwardSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("TestNamespace_IParser_Forward.g.cs")).ToString();
-        
+
         Assert.Contains("public static bool TryParse([global::TestNamespace.CustomAttribute] string? input, [global::System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out TSelf? result, params int[] extra)", forwardSource);
     }
 
@@ -276,6 +276,7 @@ public class StaticAbstractGeneratorTests {
 
         // Compile library to MetadataReference
         var librarySyntaxTree = CSharpSyntaxTree.ParseText(librarySource);
+
         var libraryCompilation = CSharpCompilation.Create(
             "LibraryAssembly",
             [librarySyntaxTree],
@@ -283,8 +284,8 @@ public class StaticAbstractGeneratorTests {
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
         );
 
-        using var ms = new MemoryStream();
-        var emitResult = libraryCompilation.Emit(ms);
+        using var ms         = new MemoryStream();
+        var       emitResult = libraryCompilation.Emit(ms);
         Assert.True(emitResult.Success, string.Join("\n", emitResult.Diagnostics.Select(d => d.ToString())));
         ms.Seek(0, SeekOrigin.Begin);
         var libraryReference = MetadataReference.CreateFromStream(ms);
@@ -305,6 +306,7 @@ public class StaticAbstractGeneratorTests {
             """;
 
         var mainSyntaxTree = CSharpSyntaxTree.ParseText(mainSource);
+
         var compilation = CSharpCompilation.Create(
             "TestAssembly",
             [mainSyntaxTree],
@@ -312,8 +314,8 @@ public class StaticAbstractGeneratorTests {
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
         );
 
-        var generator = new StaticAbstractGenerator();
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
+        var             generator = new StaticAbstractGenerator();
+        GeneratorDriver driver    = CSharpGeneratorDriver.Create(generator);
         driver = driver.RunGenerators(compilation);
         var runResult = driver.GetRunResult();
 
@@ -322,7 +324,52 @@ public class StaticAbstractGeneratorTests {
 
         var moduleInitializerSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("StaticAbstractRegistry.g.cs")).ToString();
         Assert.Contains("global::LibraryNamespace.IParser.G_Register_TryParse", moduleInitializerSource);
-        Assert.Contains("typeof(global::TestNamespace.Color)", moduleInitializerSource);
+        Assert.Contains("typeof(global::TestNamespace.Color)",                  moduleInitializerSource);
+    }
+
+    [Fact]
+    public void TestGeneratorWithRecordTargetClass() {
+        const string source =
+            """
+            using System;
+            using Implyzer;
+
+            namespace TestNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+
+                [StaticAbstract("TryParse", typeof(TryParse<object>), typeof(ParserRegistry), "TSelf", "T")]
+                public interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+                public partial record ParserRegistry;
+
+                public record struct Color : IParser<Color> {
+                    public static bool TryParse(string input, out Color result) {
+                        result = new Color();
+                        return true;
+                    }
+                }
+            }
+            """;
+
+        var             compilation = CreateCompilation(source);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        // Should have generated: Registry file and StaticAbstractRegistry (ModuleInitializer)
+        Assert.Equal(2, runResult.GeneratedTrees.Length);
+
+        var fileNames = runResult.GeneratedTrees.Select(t => Path.GetFileName(t.FilePath)).ToList();
+        Assert.Contains("TestNamespace_ParserRegistry_Registry.g.cs", fileNames);
+        Assert.Contains("StaticAbstractRegistry.g.cs",                fileNames);
+
+        var registrySource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("TestNamespace_ParserRegistry_Registry.g.cs")).ToString();
+        Assert.Contains("public partial record ParserRegistry", registrySource);
+
+        var moduleInitializerSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("StaticAbstractRegistry.g.cs")).ToString();
+        Assert.Contains("global::TestNamespace.ParserRegistry.G_Register_TryParse", moduleInitializerSource);
+        Assert.Contains("typeof(global::TestNamespace.Color)",                      moduleInitializerSource);
     }
 }
-

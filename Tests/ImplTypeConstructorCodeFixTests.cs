@@ -43,6 +43,10 @@ public class ImplTypeConstructorCodeFixTests {
                            }
                        }
 
+                       namespace System.Runtime.CompilerServices {
+                           internal static class IsExternalInit {}
+                       }
+
                        namespace TestNamespace
                        {
                        {{testSnippet}}
@@ -79,8 +83,8 @@ public class ImplTypeConstructorCodeFixTests {
             """;
 
         var expected = VerifyConstructorFix.Diagnostic(Rules.Constructor.Id)
-                                           .WithLocation(0)
-                                           .WithArguments("TestClass", "ITest");
+            .WithLocation(0)
+            .WithArguments("TestClass", "ITest");
 
         await VerifyConstructorFix.VerifyCodeFixAsync(CreateTestSource(test), CreateTestSource(fixedTest), expected);
     }
@@ -108,8 +112,8 @@ public class ImplTypeConstructorCodeFixTests {
             """;
 
         var expected = VerifyConstructorFix.Diagnostic(Rules.Constructor.Id)
-                                           .WithLocation(0)
-                                           .WithArguments("TestClass", "ITest");
+            .WithLocation(0)
+            .WithArguments("TestClass", "ITest");
 
         await VerifyConstructorFix.VerifyCodeFixAsync(CreateTestSource(test), CreateTestSource(fixedTest), expected);
     }
@@ -143,8 +147,70 @@ public class ImplTypeConstructorCodeFixTests {
             """;
 
         var expected = VerifyConstructorFix.Diagnostic(Rules.Constructor.Id)
-                                           .WithLocation(0)
-                                           .WithArguments("TestClass", "ITest");
+            .WithLocation(0)
+            .WithArguments("TestClass", "ITest");
+
+        await VerifyConstructorFix.VerifyCodeFixAsync(CreateTestSource(test), CreateTestSource(fixedTest), expected);
+    }
+
+    [Fact]
+    public async Task TestAddConstructorToRecord() {
+        var test =
+            """
+                [ImplType(ImplKind.ReferenceTypeNew)]
+                public interface ITest {}
+
+                public record {|#0:TestRecord|} : ITest {
+                    public TestRecord(int i) {}
+                }
+            """;
+
+        var fixedTest =
+            """
+                [ImplType(ImplKind.ReferenceTypeNew)]
+                public interface ITest {}
+
+                public record TestRecord : ITest {
+                    public TestRecord()
+                    {
+                    }
+
+                    public TestRecord(int i) {}
+                }
+            """;
+
+        var expected = VerifyConstructorFix.Diagnostic(Rules.Constructor.Id)
+            .WithLocation(0)
+            .WithArguments("TestRecord", "ITest");
+
+        await VerifyConstructorFix.VerifyCodeFixAsync(CreateTestSource(test), CreateTestSource(fixedTest), expected);
+    }
+
+    [Fact]
+    public async Task TestMakeConstructorPublicInRecord() {
+        var test =
+            """
+                [ImplType(ImplKind.ReferenceTypeNew)]
+                public interface ITest {}
+
+                public record {|#0:TestRecord|} : ITest {
+                    private TestRecord() {}
+                }
+            """;
+
+        var fixedTest =
+            """
+                [ImplType(ImplKind.ReferenceTypeNew)]
+                public interface ITest {}
+
+                public record TestRecord : ITest {
+                    public TestRecord() {}
+                }
+            """;
+
+        var expected = VerifyConstructorFix.Diagnostic(Rules.Constructor.Id)
+            .WithLocation(0)
+            .WithArguments("TestRecord", "ITest");
 
         await VerifyConstructorFix.VerifyCodeFixAsync(CreateTestSource(test), CreateTestSource(fixedTest), expected);
     }

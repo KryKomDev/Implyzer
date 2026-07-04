@@ -109,8 +109,8 @@ public class UseInsteadAnalyzerTests {
             """;
 
         var expected = VerifyCSUseInstead.Diagnostic(Rules.UseInstead.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("BetterMethod", "OldMethod");
+            .WithLocation(0)
+            .WithArguments("BetterMethod", "OldMethod");
 
         await VerifyCSUseInstead.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -134,8 +134,8 @@ public class UseInsteadAnalyzerTests {
             """;
 
         var expected = VerifyCSUseInstead.Diagnostic(Rules.UseInstead.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("NewClass", "OldMethod");
+            .WithLocation(0)
+            .WithArguments("NewClass", "OldMethod");
 
         await VerifyCSUseInstead.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -182,8 +182,8 @@ public class UseInsteadAnalyzerTests {
             """;
 
         var expected = VerifyCSUseInstead.Diagnostic(Rules.UseInstead.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("NewClass", ".ctor");
+            .WithLocation(0)
+            .WithArguments("NewClass", ".ctor");
 
         await VerifyCSUseInstead.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -206,8 +206,8 @@ public class UseInsteadAnalyzerTests {
             """;
 
         var expected = VerifyCSUseInstead.Diagnostic(Rules.UseInstead.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("NewClass", "OldClass");
+            .WithLocation(0)
+            .WithArguments("NewClass", "OldClass");
 
         await VerifyCSUseInstead.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -234,8 +234,8 @@ public class UseInsteadAnalyzerTests {
             """;
 
         var expected = VerifyCSUseInstead.Diagnostic(Rules.UseInstead.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("NewClass.NewMethod", "OldMethod");
+            .WithLocation(0)
+            .WithArguments("NewClass.NewMethod", "OldMethod");
 
         await VerifyCSUseInstead.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -261,8 +261,8 @@ public class UseInsteadAnalyzerTests {
             """;
 
         var expected = VerifyCSUseInstead.Diagnostic(Rules.UseInstead.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("NewClass.NewMethod", "OldMethod");
+            .WithLocation(0)
+            .WithArguments("NewClass.NewMethod", "OldMethod");
 
         await VerifyCSUseInstead.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -289,8 +289,8 @@ public class UseInsteadAnalyzerTests {
             """;
 
         var expected = VerifyCSUseInstead.Diagnostic(Rules.UseInstead.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("NewClass(int)", ".ctor");
+            .WithLocation(0)
+            .WithArguments("NewClass(int)", ".ctor");
 
         await VerifyCSUseInstead.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -316,8 +316,8 @@ public class UseInsteadAnalyzerTests {
             """;
 
         var expected = VerifyCSUseInstead.Diagnostic(Rules.UseInstead.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("NewClass(int, string)", ".ctor");
+            .WithLocation(0)
+            .WithArguments("NewClass(int, string)", ".ctor");
 
         await VerifyCSUseInstead.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -343,8 +343,8 @@ public class UseInsteadAnalyzerTests {
             """;
 
         var expected = VerifyCSUseInstead.Diagnostic(Rules.UseInstead.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("NewClass(int)", ".ctor");
+            .WithLocation(0)
+            .WithArguments("NewClass(int)", ".ctor");
 
         await VerifyCSUseInstead.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -370,8 +370,8 @@ public class UseInsteadAnalyzerTests {
             """;
 
         var expected = VerifyCSUseInstead.Diagnostic(Rules.UseInstead.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("NewClass()", ".ctor");
+            .WithLocation(0)
+            .WithArguments("NewClass()", ".ctor");
 
         await VerifyCSUseInstead.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -408,8 +408,8 @@ public class UseInsteadAnalyzerTests {
             """;
 
         var expected = VerifyCSUseInstead.Diagnostic(Rules.UseInstead.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("NewClass", "OldClass");
+            .WithLocation(0)
+            .WithArguments("NewClass", "OldClass");
 
         await VerifyCSUseInsteadFix.VerifyCodeFixAsync(CreateTestSource(test), CreateTestSource(fixtest), expected);
     }
@@ -449,8 +449,8 @@ public class UseInsteadAnalyzerTests {
             """;
 
         var expected = VerifyCSUseInstead.Diagnostic(Rules.UseInstead.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("NewMethod", "OldMethod");
+            .WithLocation(0)
+            .WithArguments("NewMethod", "OldMethod");
 
         await VerifyCSUseInsteadFix.VerifyCodeFixAsync(CreateTestSource(test), CreateTestSource(fixtest), expected);
     }
@@ -496,15 +496,15 @@ public class UseInsteadAnalyzerTests {
             """;
 
         var expected = VerifyCSUseInstead.Diagnostic(Rules.UseInstead.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("NewClass(int)", ".ctor");
+            .WithLocation(0)
+            .WithArguments("NewClass(int)", ".ctor");
 
         await VerifyCSUseInsteadFix.VerifyCodeFixAsync(CreateTestSource(test), CreateTestSource(fixtest), expected);
     }
 
     [Fact]
     public async Task TestMetadataGenericClassMember() {
-        const string librarySource = 
+        const string librarySource =
             """
             using System;
 
@@ -548,23 +548,28 @@ public class UseInsteadAnalyzerTests {
             TestCode = testCode
         };
 
-        test.SolutionTransforms.Add((solution, projectId) => {
-            var libProjectId = Microsoft.CodeAnalysis.ProjectId.CreateNewId("LibraryProject");
-            solution = solution.AddProject(libProjectId, "LibraryProject", "LibraryProject", Microsoft.CodeAnalysis.LanguageNames.CSharp);
-            var mainProject = solution.GetProject(projectId)!;
-            var libProject = solution.GetProject(libProjectId)!
-                .WithMetadataReferences(mainProject.MetadataReferences)
-                .WithCompilationOptions(mainProject.CompilationOptions!)
-                .WithParseOptions(((Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)mainProject.ParseOptions!).WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
-            solution = libProject.Solution;
-            var docId = Microsoft.CodeAnalysis.DocumentId.CreateNewId(libProjectId);
-            solution = solution.AddDocument(docId, "Library.cs", librarySource);
-            return solution.AddProjectReference(projectId, new Microsoft.CodeAnalysis.ProjectReference(libProjectId));
-        });
+        test.SolutionTransforms.Add(
+            (solution, projectId) => {
+                var libProjectId = Microsoft.CodeAnalysis.ProjectId.CreateNewId("LibraryProject");
+                solution = solution.AddProject(libProjectId, "LibraryProject", "LibraryProject", Microsoft.CodeAnalysis.LanguageNames.CSharp);
+                var mainProject = solution.GetProject(projectId)!;
+
+                var libProject = solution.GetProject(libProjectId)!
+                    .WithMetadataReferences(mainProject.MetadataReferences)
+                    .WithCompilationOptions(mainProject.CompilationOptions!)
+                    .WithParseOptions(((Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)mainProject.ParseOptions!).WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
+
+                solution = libProject.Solution;
+                var docId = Microsoft.CodeAnalysis.DocumentId.CreateNewId(libProjectId);
+                solution = solution.AddDocument(docId, "Library.cs", librarySource);
+
+                return solution.AddProjectReference(projectId, new Microsoft.CodeAnalysis.ProjectReference(libProjectId));
+            }
+        );
 
         var expected = VerifyCSUseInstead.Diagnostic(Rules.UseInstead.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("BetterMethod", "OldMethod");
+            .WithLocation(0)
+            .WithArguments("BetterMethod", "OldMethod");
 
         test.ExpectedDiagnostics.Add(expected);
 

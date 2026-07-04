@@ -21,19 +21,19 @@ namespace Implyzer {
     /// </summary>
     [AttributeUsage(AttributeTargets.Interface, Inherited = false, AllowMultiple = true)]
     public sealed class StaticAbstractAttribute : Attribute {
-    
+
         public Type?                      TargetClass { get; }
         public string                     MethodName  { get; }
         public Type                       Signature   { get; }
         public Dictionary<string, string> TypeParams  { get; }
-        
+
         public StaticAbstractAttribute(string methodName, Type signature, params string[] typeParams) {
             MethodName  = methodName;
             Signature   = signature;
             TypeParams  = ToDictionary(typeParams);
             TargetClass = null;
         }
-    
+
         public StaticAbstractAttribute(string methodName, Type signature, Type targetClass, params string[] typeParams) {
             MethodName  = methodName;
             Signature   = signature;
@@ -43,6 +43,7 @@ namespace Implyzer {
 
         private static Dictionary<string, string> ToDictionary(string[]? array) {
             var dict = new Dictionary<string, string>();
+
             if (array != null) {
                 for (int i = 0; i < array.Length; i += 2) {
                     if (i + 1 < array.Length) {
@@ -50,9 +51,11 @@ namespace Implyzer {
                     }
                 }
             }
+
             return dict;
         }
     }
+
 }
 
 #nullable restore

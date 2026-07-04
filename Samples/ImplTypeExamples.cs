@@ -25,7 +25,6 @@ public struct StructRepository : IRepository {
 }
 */
 
-
 // --- Value Type Enforcements ---
 [ImplType(ImplKind.ValueType)]
 public interface IDataPayload {
@@ -45,7 +44,6 @@ public class ClassPayload : IDataPayload {
     public byte[] Bytes => [];
 }
 */
-
 
 // --- Base Class Inheritance Enforcements ---
 public abstract class EntityBase {

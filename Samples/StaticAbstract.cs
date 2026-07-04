@@ -24,43 +24,47 @@ public partial interface ICustomParsable<TSelf> where TSelf : ICustomParsable<TS
 
 // VALID: True implements ICustomParsable<True> and provides the matching static method.
 public class True : ICustomParsable<True> {
-    
+
     public static bool TryParse([NotNullWhen(true)] string? input, [MaybeNullWhen(false)] out True result) {
         if (input == "true") {
             result = new True();
+
             return true;
         }
-        
+
         result = null;
+
         return false;
     }
-    
-    public static True Parse([NotNullWhen(true)] string? input) => 
+
+    public static True Parse([NotNullWhen(true)] string? input) =>
         TryParse(input, out var result)
-            ? result 
+            ? result
             : throw new ArgumentException();
-    
+
     public override string ToString() => "true";
 }
 
 // VALID: False implements ICustomParsable<False> and provides the matching static method.
 public class False : ICustomParsable<False> {
-    
+
     public static bool TryParse([NotNullWhen(true)] string? input, [MaybeNullWhen(false)] out False result) {
         if (input == "false") {
             result = new False();
+
             return true;
         }
-        
+
         result = null;
+
         return false;
     }
-    
-    public static False Parse([NotNullWhen(true)] string? input) => 
+
+    public static False Parse([NotNullWhen(true)] string? input) =>
         TryParse(input, out var result)
-            ? result 
+            ? result
             : throw new ArgumentException();
-    
+
     public override string ToString() => "false";
 }
 
@@ -76,24 +80,23 @@ public class Dog : ICustomParsable<Dog> {
 
 public class Program {
     public static void Main() {
-        
         // === Option 1: Generic companion static method invocation ===
-        
+
         // this will succeed
         var genericSuccess = ICustomParsable.TryParse<True>("true", out var genericTrueResult);
         Console.WriteLine($"Generic TryParse ('true' -> Implyzer.Sample.True): {genericSuccess}, Result: {genericTrueResult}");
-        
+
         // this will fail
         var genericFail = ICustomParsable.TryParse<False>("no", out var genericFalseResult);
         Console.WriteLine($"Generic TryParse ('no' -> Implyzer.Sample.False): {genericFail}, Result: {genericFalseResult}");
 
-        
+
         // === Option 2: Non-generic Type-based static method invocation (useful for dynamic/runtime resolving) ===
-        
+
         // this will succeed
         var nonGenericSuccess = ICustomParsable.TryParse(typeof(True), "true", out var nonGenericTrueResult);
         Console.WriteLine($"Non-generic TryParse ('true' -> Implyzer.Sample.True): {nonGenericSuccess}, Result: {nonGenericTrueResult}");
-        
+
         // this will fail
         var nonGenericFail = ICustomParsable.TryParse(typeof(False), "no", out var nonGenericFalseResult);
         Console.WriteLine($"Non-generic TryParse ('no' -> Implyzer.Sample.False): {nonGenericFail}, Result: {nonGenericFalseResult}");

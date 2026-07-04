@@ -26,13 +26,15 @@ public class ImplTypeRefValCodeFixProvider : CodeFixProvider {
             if (node is not TypeDeclarationSyntax typeDecl)
                 continue;
 
-            var isClass  = typeDecl.Kind() == SyntaxKind.ClassDeclaration;
-            var isStruct = typeDecl.Kind() == SyntaxKind.StructDeclaration;
+            var isClass        = typeDecl.Kind() == SyntaxKind.ClassDeclaration;
+            var isStruct       = typeDecl.Kind() == SyntaxKind.StructDeclaration;
+            var isRecord       = typeDecl.Kind() == SyntaxKind.RecordDeclaration;
+            var isRecordStruct = typeDecl.Kind() == SyntaxKind.RecordStructDeclaration;
 
-            if (!isClass && !isStruct)
+            if (!isClass && !isStruct && !isRecord && !isRecordStruct)
                 continue;
 
-            var title = isClass ? "Change to struct" : "Change to class";
+            var title = isClass || isRecord ? "Change to struct" : "Change to class";
 
             context.RegisterCodeFix(
                 CodeAction.Create(
@@ -50,11 +52,13 @@ public class ImplTypeRefValCodeFixProvider : CodeFixProvider {
         TypeDeclarationSyntax typeDecl,
         CancellationToken     cancellationToken
     ) {
-        var isClass = typeDecl.Kind() == SyntaxKind.ClassDeclaration;
+        var isClass        = typeDecl.Kind() == SyntaxKind.ClassDeclaration;
+        var isRecord       = typeDecl.Kind() == SyntaxKind.RecordDeclaration;
+        var isRecordStruct = typeDecl.Kind() == SyntaxKind.RecordStructDeclaration;
 
         TypeDeclarationSyntax newTypeDecl;
 
-        if (isClass)
+        if (isClass) {
             newTypeDecl = SyntaxFactory.StructDeclaration(
                 typeDecl.AttributeLists,
                 typeDecl.Modifiers,
@@ -68,7 +72,48 @@ public class ImplTypeRefValCodeFixProvider : CodeFixProvider {
                 typeDecl.CloseBraceToken,
                 typeDecl.SemicolonToken
             );
-        else
+        }
+        else if (isRecord) {
+            var recordDecl = (RecordDeclarationSyntax)typeDecl;
+
+            newTypeDecl = SyntaxFactory.RecordDeclaration(
+                SyntaxKind.RecordStructDeclaration,
+                recordDecl.AttributeLists,
+                recordDecl.Modifiers,
+                recordDecl.Keyword,
+                SyntaxFactory.Token(SyntaxKind.StructKeyword).WithLeadingTrivia(SyntaxFactory.Space),
+                recordDecl.Identifier,
+                recordDecl.TypeParameterList,
+                recordDecl.ParameterList,
+                recordDecl.BaseList,
+                recordDecl.ConstraintClauses,
+                recordDecl.OpenBraceToken,
+                recordDecl.Members,
+                recordDecl.CloseBraceToken,
+                recordDecl.SemicolonToken
+            );
+        }
+        else if (isRecordStruct) {
+            var recordDecl = (RecordDeclarationSyntax)typeDecl;
+
+            newTypeDecl = SyntaxFactory.RecordDeclaration(
+                SyntaxKind.RecordDeclaration,
+                recordDecl.AttributeLists,
+                recordDecl.Modifiers,
+                recordDecl.Keyword,
+                default,
+                recordDecl.Identifier,
+                recordDecl.TypeParameterList,
+                recordDecl.ParameterList,
+                recordDecl.BaseList,
+                recordDecl.ConstraintClauses,
+                recordDecl.OpenBraceToken,
+                recordDecl.Members,
+                recordDecl.CloseBraceToken,
+                recordDecl.SemicolonToken
+            );
+        }
+        else {
             newTypeDecl = SyntaxFactory.ClassDeclaration(
                 typeDecl.AttributeLists,
                 typeDecl.Modifiers,
@@ -82,6 +127,7 @@ public class ImplTypeRefValCodeFixProvider : CodeFixProvider {
                 typeDecl.CloseBraceToken,
                 typeDecl.SemicolonToken
             );
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
 

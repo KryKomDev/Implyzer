@@ -5,7 +5,6 @@
 /// cannot be implemented directly by classes/structs. Instead, developers must implement
 /// the interface indirectly via the designated sub-interface.
 /// </summary>
-
 [IndirectImpl(typeof(IRepository<>))]
 public interface IRepositoryMarker {
     object? Find(int id);
@@ -18,9 +17,7 @@ public interface IRepository<T> : IRepositoryMarker {
 
 // VALID: Class implements the generic sub-interface, which is allowed.
 public class BookRepository : IRepository<string> {
-    public string? Find(int id) {
-        return $"Book {id}";
-    }
+    public string? Find(int id) => $"Book {id}";
 
     object? IRepositoryMarker.Find(int id) => Find(id);
 }

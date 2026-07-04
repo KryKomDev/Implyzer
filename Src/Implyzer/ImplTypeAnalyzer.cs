@@ -73,11 +73,11 @@ public class ImplTypeAnalyzer : DiagnosticAnalyzer {
             return;
 
         var properties = ImmutableDictionary<string, string?>.Empty
-                                                             .Add(
-                                                                 "RequiredBaseType",
-                                                                 requiredBaseType
-                                                                     .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-                                                             );
+            .Add(
+                "RequiredBaseType",
+                requiredBaseType
+                    .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+            );
 
         context.ReportDiagnostic(
             Diagnostic.Create(
@@ -149,7 +149,7 @@ public class ImplTypeAnalyzer : DiagnosticAnalyzer {
             return true;
 
         return type.InstanceConstructors
-                   .Any(c => !c.IsStatic && c.Parameters.Length == 0 && c.DeclaredAccessibility == Accessibility.Public);
+            .Any(c => !c.IsStatic && c.Parameters.Length == 0 && c.DeclaredAccessibility == Accessibility.Public);
     }
 
     private static bool InheritsFrom(INamedTypeSymbol type, INamedTypeSymbol baseType) {

@@ -47,6 +47,10 @@ public class ImplTypeAnalyzerTests {
               }
           }
 
+          namespace System.Runtime.CompilerServices {
+              internal static class IsExternalInit {}
+          }
+
           namespace TestNamespace
           {
               {{testSnippet}}
@@ -77,8 +81,8 @@ public class ImplTypeAnalyzerTests {
             """;
 
         var expected = VerifyCS.Diagnostic(Rules.RefVal.Id)
-                               .WithLocation(0)
-                               .WithArguments("TestStruct", "reference type (class)", "ITest", "ReferenceType");
+            .WithLocation(0)
+            .WithArguments("TestStruct", "reference type (class)", "ITest", "ReferenceType");
 
         await VerifyCS.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -107,8 +111,8 @@ public class ImplTypeAnalyzerTests {
             """;
 
         var expected = VerifyCS.Diagnostic(Rules.RefVal.Id)
-                               .WithLocation(0)
-                               .WithArguments("TestClass", "value type (struct)", "ITest", "ValueType");
+            .WithLocation(0)
+            .WithArguments("TestClass", "value type (struct)", "ITest", "ValueType");
 
         await VerifyCS.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -142,8 +146,8 @@ public class ImplTypeAnalyzerTests {
             """;
 
         var expected = VerifyCS.Diagnostic(Rules.Type.Id)
-                               .WithLocation(0)
-                               .WithArguments("TestClass", "MyBase", "ITest");
+            .WithLocation(0)
+            .WithArguments("TestClass", "MyBase", "ITest");
 
         await VerifyCS.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -161,8 +165,8 @@ public class ImplTypeAnalyzerTests {
             """;
 
         var expected = VerifyCS.Diagnostic(Rules.RefVal.Id)
-                               .WithLocation(0)
-                               .WithArguments("TestStruct", "reference type (class)", "ITest", "ReferenceType");
+            .WithLocation(0)
+            .WithArguments("TestStruct", "reference type (class)", "ITest", "ReferenceType");
 
         await VerifyCS.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -206,8 +210,8 @@ public class ImplTypeAnalyzerTests {
             """;
 
         var expected = VerifyCS.Diagnostic(Rules.RefVal.Id)
-                               .WithLocation(0)
-                               .WithArguments("TestStruct", "reference type (class)", "ITest", "ReferenceTypeNew");
+            .WithLocation(0)
+            .WithArguments("TestStruct", "reference type (class)", "ITest", "ReferenceTypeNew");
 
         await VerifyCS.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -225,8 +229,8 @@ public class ImplTypeAnalyzerTests {
             """;
 
         var expected = VerifyCS.Diagnostic(Rules.Constructor.Id)
-                               .WithLocation(0)
-                               .WithArguments("TestClass", "ITest");
+            .WithLocation(0)
+            .WithArguments("TestClass", "ITest");
 
         await VerifyCS.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -244,15 +248,105 @@ public class ImplTypeAnalyzerTests {
             """;
 
         var expected = VerifyCS.Diagnostic(Rules.Constructor.Id)
-                               .WithLocation(0)
-                               .WithArguments("TestClass", "ITest");
+            .WithLocation(0)
+            .WithArguments("TestClass", "ITest");
+
+        await VerifyCS.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
+
+    [Fact]
+    public async Task TestValidReferenceTypeRecord() {
+        var test =
+            """
+            [ImplType(ImplKind.ReferenceType)]
+            public interface ITest {}
+
+            public record TestRecord : ITest {}
+            """;
+
+        await VerifyCS.VerifyAnalyzerAsync(CreateTestSource(test));
+    }
+
+    [Fact]
+    public async Task TestInvalidReferenceTypeRecord() {
+        var test =
+            """
+            [ImplType(ImplKind.ReferenceType)]
+            public interface ITest {}
+
+            public record struct {|#0:TestRecordStruct|} : ITest {}
+            """;
+
+        var expected = VerifyCS.Diagnostic(Rules.RefVal.Id)
+            .WithLocation(0)
+            .WithArguments("TestRecordStruct", "reference type (class)", "ITest", "ReferenceType");
+
+        await VerifyCS.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
+
+    [Fact]
+    public async Task TestValidValueTypeRecord() {
+        var test =
+            """
+            [ImplType(ImplKind.ValueType)]
+            public interface ITest {}
+
+            public record struct TestRecordStruct : ITest {}
+            """;
+
+        await VerifyCS.VerifyAnalyzerAsync(CreateTestSource(test));
+    }
+
+    [Fact]
+    public async Task TestInvalidValueTypeRecord() {
+        var test =
+            """
+            [ImplType(ImplKind.ValueType)]
+            public interface ITest {}
+
+            public record {|#0:TestRecord|} : ITest {}
+            """;
+
+        var expected = VerifyCS.Diagnostic(Rules.RefVal.Id)
+            .WithLocation(0)
+            .WithArguments("TestRecord", "value type (struct)", "ITest", "ValueType");
+
+        await VerifyCS.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
+
+    [Fact]
+    public async Task TestValidReferenceTypeNewRecord() {
+        var test =
+            """
+            [ImplType(ImplKind.ReferenceTypeNew)]
+            public interface ITest {}
+
+            public record TestRecord : ITest {}
+            """;
+
+        await VerifyCS.VerifyAnalyzerAsync(CreateTestSource(test));
+    }
+
+    [Fact]
+    public async Task TestInvalidReferenceTypeNewRecord_NoParameterlessCtor() {
+        var test =
+            """
+            [ImplType(ImplKind.ReferenceTypeNew)]
+            public interface ITest {}
+
+            public record {|#0:TestRecord|}(int X) : ITest {}
+            """;
+
+        var expected = VerifyCS.Diagnostic(Rules.Constructor.Id)
+            .WithLocation(0)
+            .WithArguments("TestRecord", "ITest");
 
         await VerifyCS.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
 
     [Fact]
     public async Task TestMetadataGenericInterface() {
-        const string librarySource = 
+        const string librarySource =
             """
             using System;
 
@@ -298,26 +392,31 @@ public class ImplTypeAnalyzerTests {
             TestCode = testCode
         };
 
-        test.SolutionTransforms.Add((solution, projectId) => {
-            var libProjectId = Microsoft.CodeAnalysis.ProjectId.CreateNewId("LibraryProject");
-            solution = solution.AddProject(libProjectId, "LibraryProject", "LibraryProject", Microsoft.CodeAnalysis.LanguageNames.CSharp);
-            var mainProject = solution.GetProject(projectId)!;
-            var libProject = solution.GetProject(libProjectId)!
-                .WithMetadataReferences(mainProject.MetadataReferences)
-                .WithCompilationOptions(mainProject.CompilationOptions!)
-                .WithParseOptions(((Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)mainProject.ParseOptions!).WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
-            solution = libProject.Solution;
-            var docId = Microsoft.CodeAnalysis.DocumentId.CreateNewId(libProjectId);
-            solution = solution.AddDocument(docId, "Library.cs", librarySource);
-            return solution.AddProjectReference(projectId, new Microsoft.CodeAnalysis.ProjectReference(libProjectId));
-        });
+        test.SolutionTransforms.Add(
+            (solution, projectId) => {
+                var libProjectId = Microsoft.CodeAnalysis.ProjectId.CreateNewId("LibraryProject");
+                solution = solution.AddProject(libProjectId, "LibraryProject", "LibraryProject", Microsoft.CodeAnalysis.LanguageNames.CSharp);
+                var mainProject = solution.GetProject(projectId)!;
+
+                var libProject = solution.GetProject(libProjectId)!
+                    .WithMetadataReferences(mainProject.MetadataReferences)
+                    .WithCompilationOptions(mainProject.CompilationOptions!)
+                    .WithParseOptions(((Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)mainProject.ParseOptions!).WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
+
+                solution = libProject.Solution;
+                var docId = Microsoft.CodeAnalysis.DocumentId.CreateNewId(libProjectId);
+                solution = solution.AddDocument(docId, "Library.cs", librarySource);
+
+                return solution.AddProjectReference(projectId, new Microsoft.CodeAnalysis.ProjectReference(libProjectId));
+            }
+        );
 
         await test.RunAsync();
     }
 
     [Fact]
     public async Task TestMetadataGenericInterfaceInvalid() {
-        const string librarySource = 
+        const string librarySource =
             """
             using System;
 
@@ -363,23 +462,28 @@ public class ImplTypeAnalyzerTests {
             TestCode = testCode
         };
 
-        test.SolutionTransforms.Add((solution, projectId) => {
-            var libProjectId = Microsoft.CodeAnalysis.ProjectId.CreateNewId("LibraryProject");
-            solution = solution.AddProject(libProjectId, "LibraryProject", "LibraryProject", Microsoft.CodeAnalysis.LanguageNames.CSharp);
-            var mainProject = solution.GetProject(projectId)!;
-            var libProject = solution.GetProject(libProjectId)!
-                .WithMetadataReferences(mainProject.MetadataReferences)
-                .WithCompilationOptions(mainProject.CompilationOptions!)
-                .WithParseOptions(((Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)mainProject.ParseOptions!).WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
-            solution = libProject.Solution;
-            var docId = Microsoft.CodeAnalysis.DocumentId.CreateNewId(libProjectId);
-            solution = solution.AddDocument(docId, "Library.cs", librarySource);
-            return solution.AddProjectReference(projectId, new Microsoft.CodeAnalysis.ProjectReference(libProjectId));
-        });
+        test.SolutionTransforms.Add(
+            (solution, projectId) => {
+                var libProjectId = Microsoft.CodeAnalysis.ProjectId.CreateNewId("LibraryProject");
+                solution = solution.AddProject(libProjectId, "LibraryProject", "LibraryProject", Microsoft.CodeAnalysis.LanguageNames.CSharp);
+                var mainProject = solution.GetProject(projectId)!;
+
+                var libProject = solution.GetProject(libProjectId)!
+                    .WithMetadataReferences(mainProject.MetadataReferences)
+                    .WithCompilationOptions(mainProject.CompilationOptions!)
+                    .WithParseOptions(((Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)mainProject.ParseOptions!).WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
+
+                solution = libProject.Solution;
+                var docId = Microsoft.CodeAnalysis.DocumentId.CreateNewId(libProjectId);
+                solution = solution.AddDocument(docId, "Library.cs", librarySource);
+
+                return solution.AddProjectReference(projectId, new Microsoft.CodeAnalysis.ProjectReference(libProjectId));
+            }
+        );
 
         var expected = VerifyCS.Diagnostic(Rules.RefVal.Id)
-                               .WithLocation(0)
-                               .WithArguments("TestClass", "value type (struct)", "ITest", "ValueType");
+            .WithLocation(0)
+            .WithArguments("TestClass", "value type (struct)", "ITest", "ValueType");
 
         test.ExpectedDiagnostics.Add(expected);
 

@@ -51,8 +51,25 @@ public class IndirectImplAnalyzerTests {
             """;
 
         var expected = VerifyIndirectImpl.Diagnostic(Rules.IndirectImpl.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("TestClass", "IInternal", "");
+            .WithLocation(0)
+            .WithArguments("TestClass", "IInternal", "");
+
+        await VerifyIndirectImpl.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
+
+    [Fact]
+    public async Task TestDirectImplementationErrorOnRecord() {
+        var test =
+            """
+            [IndirectImpl]
+            public interface IInternal {}
+
+            public record TestRecord : {|#0:IInternal|} {}
+            """;
+
+        var expected = VerifyIndirectImpl.Diagnostic(Rules.IndirectImpl.Id)
+            .WithLocation(0)
+            .WithArguments("TestRecord", "IInternal", "");
 
         await VerifyIndirectImpl.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -70,8 +87,8 @@ public class IndirectImplAnalyzerTests {
             """;
 
         var expected = VerifyIndirectImpl.Diagnostic(Rules.IndirectImpl.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("TestClass", "IInternal", ", implement 'IPublic' instead");
+            .WithLocation(0)
+            .WithArguments("TestClass", "IInternal", ", implement 'IPublic' instead");
 
         await VerifyIndirectImpl.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -93,7 +110,7 @@ public class IndirectImplAnalyzerTests {
 
     [Fact]
     public async Task TestMetadataGenericInterface() {
-        const string librarySource = 
+        const string librarySource =
             """
             using System;
 
@@ -126,23 +143,28 @@ public class IndirectImplAnalyzerTests {
             TestCode = testCode
         };
 
-        test.SolutionTransforms.Add((solution, projectId) => {
-            var libProjectId = Microsoft.CodeAnalysis.ProjectId.CreateNewId("LibraryProject");
-            solution = solution.AddProject(libProjectId, "LibraryProject", "LibraryProject", Microsoft.CodeAnalysis.LanguageNames.CSharp);
-            var mainProject = solution.GetProject(projectId)!;
-            var libProject = solution.GetProject(libProjectId)!
-                .WithMetadataReferences(mainProject.MetadataReferences)
-                .WithCompilationOptions(mainProject.CompilationOptions!)
-                .WithParseOptions(((Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)mainProject.ParseOptions!).WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
-            solution = libProject.Solution;
-            var docId = Microsoft.CodeAnalysis.DocumentId.CreateNewId(libProjectId);
-            solution = solution.AddDocument(docId, "Library.cs", librarySource);
-            return solution.AddProjectReference(projectId, new Microsoft.CodeAnalysis.ProjectReference(libProjectId));
-        });
+        test.SolutionTransforms.Add(
+            (solution, projectId) => {
+                var libProjectId = Microsoft.CodeAnalysis.ProjectId.CreateNewId("LibraryProject");
+                solution = solution.AddProject(libProjectId, "LibraryProject", "LibraryProject", Microsoft.CodeAnalysis.LanguageNames.CSharp);
+                var mainProject = solution.GetProject(projectId)!;
+
+                var libProject = solution.GetProject(libProjectId)!
+                    .WithMetadataReferences(mainProject.MetadataReferences)
+                    .WithCompilationOptions(mainProject.CompilationOptions!)
+                    .WithParseOptions(((Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)mainProject.ParseOptions!).WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
+
+                solution = libProject.Solution;
+                var docId = Microsoft.CodeAnalysis.DocumentId.CreateNewId(libProjectId);
+                solution = solution.AddDocument(docId, "Library.cs", librarySource);
+
+                return solution.AddProjectReference(projectId, new Microsoft.CodeAnalysis.ProjectReference(libProjectId));
+            }
+        );
 
         var expected = VerifyIndirectImpl.Diagnostic(Rules.IndirectImpl.Id)
-                                         .WithLocation(0)
-                                         .WithArguments("TestClass", "IInternal", "");
+            .WithLocation(0)
+            .WithArguments("TestClass", "IInternal", "");
 
         test.ExpectedDiagnostics.Add(expected);
 

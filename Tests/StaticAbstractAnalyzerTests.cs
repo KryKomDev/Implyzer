@@ -12,13 +12,22 @@ public static class VerifyStaticAbstract {
         var test = new CSharpAnalyzerTest<StaticAbstractAnalyzer, DefaultVerifier> {
             TestCode = source
         };
-        test.SolutionTransforms.Add((solution, projectId) => {
-            var project = solution.GetProject(projectId);
-            if (project == null) return solution;
-            var parseOptions = project.ParseOptions as Microsoft.CodeAnalysis.CSharp.CSharpParseOptions;
-            if (parseOptions == null) return solution;
-            return solution.WithProjectParseOptions(projectId, parseOptions.WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
-        });
+
+        test.SolutionTransforms.Add(
+            (solution, projectId) => {
+                var project = solution.GetProject(projectId);
+
+                if (project == null)
+                    return solution;
+
+                var parseOptions = project.ParseOptions as Microsoft.CodeAnalysis.CSharp.CSharpParseOptions;
+
+                if (parseOptions == null)
+                    return solution;
+
+                return solution.WithProjectParseOptions(projectId, parseOptions.WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
+            }
+        );
 
         test.ExpectedDiagnostics.AddRange(expected);
         await test.RunAsync();
@@ -105,8 +114,8 @@ public class StaticAbstractAnalyzerTests {
             """;
 
         var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticAbstractInterfaceNotPartial.Id)
-                                           .WithLocation(0)
-                                           .WithArguments("IParser");
+            .WithLocation(0)
+            .WithArguments("IParser");
 
         await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -124,8 +133,8 @@ public class StaticAbstractAnalyzerTests {
             """;
 
         var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticAbstractTargetClassNotPartial.Id)
-                                           .WithLocation(0)
-                                           .WithArguments("Registry");
+            .WithLocation(0)
+            .WithArguments("Registry");
 
         await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -143,8 +152,8 @@ public class StaticAbstractAnalyzerTests {
             """;
 
         var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticAbstractTargetClassMustBeClass.Id)
-                                           .WithLocation(0)
-                                           .WithArguments("Registry");
+            .WithLocation(0)
+            .WithArguments("Registry");
 
         await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -162,8 +171,8 @@ public class StaticAbstractAnalyzerTests {
             """;
 
         var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticAbstractMethodNotImplemented.Id)
-                                           .WithLocation(0)
-                                           .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
+            .WithLocation(0)
+            .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
 
         await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -179,8 +188,8 @@ public class StaticAbstractAnalyzerTests {
             """;
 
         var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticAbstractSignatureNotDelegate.Id)
-                                           .WithLocation(0)
-                                           .WithArguments("NotADelegate");
+            .WithLocation(0)
+            .WithArguments("NotADelegate");
 
         await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -205,8 +214,8 @@ public class StaticAbstractAnalyzerTests {
             """;
 
         var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticAbstractMethodNotImplemented.Id)
-                                           .WithLocation(0)
-                                           .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
+            .WithLocation(0)
+            .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
 
         await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -230,8 +239,8 @@ public class StaticAbstractAnalyzerTests {
             """;
 
         var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticAbstractMethodNotImplemented.Id)
-                                           .WithLocation(0)
-                                           .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
+            .WithLocation(0)
+            .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
 
         await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
@@ -260,15 +269,15 @@ public class StaticAbstractAnalyzerTests {
             """;
 
         var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticAbstractMethodNotImplemented.Id)
-                                           .WithLocation(0)
-                                           .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
+            .WithLocation(0)
+            .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
 
         await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
 
     [Fact]
     public async Task TestMetadataInterfaceNotImplemented() {
-        const string librarySource = 
+        const string librarySource =
             """
             using System;
             using System.Collections.Generic;
@@ -330,23 +339,28 @@ public class StaticAbstractAnalyzerTests {
             TestCode = testCode
         };
 
-        test.SolutionTransforms.Add((solution, projectId) => {
-            var libProjectId = Microsoft.CodeAnalysis.ProjectId.CreateNewId("LibraryProject");
-            solution = solution.AddProject(libProjectId, "LibraryProject", "LibraryProject", Microsoft.CodeAnalysis.LanguageNames.CSharp);
-            var mainProject = solution.GetProject(projectId)!;
-            var libProject = solution.GetProject(libProjectId)!
-                .WithMetadataReferences(mainProject.MetadataReferences)
-                .WithCompilationOptions(mainProject.CompilationOptions!)
-                .WithParseOptions(((Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)mainProject.ParseOptions!).WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
-            solution = libProject.Solution;
-            var docId = Microsoft.CodeAnalysis.DocumentId.CreateNewId(libProjectId);
-            solution = solution.AddDocument(docId, "Library.cs", librarySource);
-            return solution.AddProjectReference(projectId, new Microsoft.CodeAnalysis.ProjectReference(libProjectId));
-        });
+        test.SolutionTransforms.Add(
+            (solution, projectId) => {
+                var libProjectId = Microsoft.CodeAnalysis.ProjectId.CreateNewId("LibraryProject");
+                solution = solution.AddProject(libProjectId, "LibraryProject", "LibraryProject", Microsoft.CodeAnalysis.LanguageNames.CSharp);
+                var mainProject = solution.GetProject(projectId)!;
+
+                var libProject = solution.GetProject(libProjectId)!
+                    .WithMetadataReferences(mainProject.MetadataReferences)
+                    .WithCompilationOptions(mainProject.CompilationOptions!)
+                    .WithParseOptions(((Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)mainProject.ParseOptions!).WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
+
+                solution = libProject.Solution;
+                var docId = Microsoft.CodeAnalysis.DocumentId.CreateNewId(libProjectId);
+                solution = solution.AddDocument(docId, "Library.cs", librarySource);
+
+                return solution.AddProjectReference(projectId, new Microsoft.CodeAnalysis.ProjectReference(libProjectId));
+            }
+        );
 
         var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticAbstractMethodNotImplemented.Id)
-                                           .WithLocation(0)
-                                           .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
+            .WithLocation(0)
+            .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
 
         test.ExpectedDiagnostics.Add(expected);
 
