@@ -1,9 +1,16 @@
-﻿name: Test Implyzer
+name: Test Implyzer
 
 on:
   push:
-    tags-ignore:
-      - 'v*'
+    branches:
+      - main
+    paths:
+      - 'Src/**'
+      - 'Tests/**'
+      - '.github/workflows/test.yml'
+  pull_request:
+    branches:
+      - main
     paths:
       - 'Src/**'
       - 'Tests/**'
@@ -38,13 +45,10 @@ jobs:
         run: dotnet restore ${{ env.SolutionName }} --ignore-failed-sources
 
       - name: Build project
-        run: dotnet build ${{ env.ProjectPath }} --no-restore
+        run: dotnet build ${{ env.ProjectPath }} --configuration ${{ matrix.configuration }} --no-restore
 
       - name: Build test project
-        run: dotnet build ${{ env.TestProjectPath }} --no-restore
+        run: dotnet build ${{ env.TestProjectPath }} --configuration ${{ matrix.configuration }} --no-restore
 
       - name: Execute unit tests
-        run: dotnet test ${{ env.TestProjectPath }} --no-build
-
-      - name: Restore the application
-        run: dotnet restore ${{ env.TestProjectPath }}
+        run: dotnet test ${{ env.TestProjectPath }} --configuration ${{ matrix.configuration }} --no-build

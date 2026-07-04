@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (overrides csproj, e.g. 1.2.3)'
+        required: false
+        type: string
 
 env:
   SolutionName: ./Implyzer.slnx
@@ -14,6 +19,7 @@ env:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   build:
@@ -32,6 +38,20 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore ${{ env.SolutionName }} --ignore-failed-sources
 
+    - name: Get version
+      id: get_version
+      run: |
+        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          # Extract version from tag (strip 'v' prefix if present)
+          VERSION=${GITHUB_REF_NAME#v}
+        elif [[ -n "${{ github.event.inputs.version }}" ]]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=""
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+      shell: bash
+
     - name: Build
       run: dotnet build ${{ env.ProjectPath }} --configuration Release --no-restore
 
@@ -42,7 +62,13 @@ jobs:
       run: dotnet test ${{ env.TestProjectPath }} --no-build --configuration Release
   
     - name: Pack
-      run: dotnet pack ${{ env.ProjectPath }} --configuration Release --no-build --output ${{ env.NugetOutputDir }}
+      run: |
+        VERSION_ARG=""
+        if [ -n "${{ steps.get_version.outputs.version }}" ]; then
+          VERSION_ARG="/p:Version=${{ steps.get_version.outputs.version }}"
+        fi
+        dotnet pack ${{ env.ProjectPath }} --configuration Release --no-build --output ${{ env.NugetOutputDir }} $VERSION_ARG
+      shell: bash
     
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
@@ -55,7 +81,7 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.version != ''
     
     steps:
     - name: Download Build Artifacts
@@ -64,12 +90,18 @@ jobs:
         name: build-artifacts
         path: artifacts
 
+    - name: NuGet Login
+      uses: NuGet/login@v1
+      id: login
+      with:
+        user: ${{ vars.NUGET_USERNAME || secrets.NUGET_USERNAME }}
+
     - name: Push to NuGet
       run: |
         # Use simple glob expansion in shell
         for f in artifacts/${{ env.NugetOutputDir }}*.nupkg; do
           if [[ "$f" != *"symbols.nupkg" ]]; then
-            dotnet nuget push "$f" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+            dotnet nuget push "$f" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json
           fi
         done
       shell: bash
@@ -77,6 +109,7 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.version != ''
       
     steps:
     - name: Checkout code
@@ -94,10 +127,7 @@ jobs:
       id: release_notes
       run: |
         echo "commits<<EOF" >> $GITHUB_OUTPUT
-        # Get commits from the beginning or previous tag. 
-        # Here we just dump all commits for simplicity as requested 'all commit messages', 
-        # but realistically probably means 'for this release'.
-        # Trying to find previous tag:
+        # Get commits from the beginning or previous tag.
         PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
         
         if [ -z "$PREV_TAG" ]; then
@@ -115,6 +145,7 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
+        tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', github.event.inputs.version) }}
         body: ${{ steps.release_notes.outputs.commits }}
         files: |
           artifacts/Src/Implyzer/bin/Release/netstandard2.0/Implyzer.dll
