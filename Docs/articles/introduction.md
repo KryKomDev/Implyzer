@@ -19,8 +19,8 @@ Guarantees that any class implementing the constrained interface also inherits f
 ### 3. Indirect Implementation Enforcement (`[IndirectImpl]`)
 Forbids implementing specific interfaces directly on classes or structs, ensuring that the interface is only implemented indirectly through designated sub-interfaces. This prevents developers from bypassing key domain boilerplate or generic contract validation.
 
-### 4. Static Abstract Simulation (`[StaticAbstract]`)
-Simulates `static abstract` interface methods, automatically generating type-safe generic and non-generic companion routing classes that direct calls to registered static methods.
+### 4. Static Abstract Interface Support (`[StaticAbstract]`)
+Brings `static abstract` interface methods to all target frameworks. On C# 11+ / .NET 7+, it emits native `static abstract` member declarations and zero-overhead direct calls; on older targets, it automatically generates type-safe companion routing helpers and registry initializers.
 
 ### 5. API Refactoring Suggestions (`[UseInstead]`)
 Generates warning or information diagnostics suggesting replacement APIs to developers, complete with automated IDE Quick Actions (Code Fixes) to rewrite the code.

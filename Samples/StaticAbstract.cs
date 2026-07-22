@@ -17,7 +17,7 @@ public delegate T Parse<T>([NotNullWhen(true)] string? input);
 /// <summary>
 /// Illustrates [StaticAbstract]. Simulates C# 11 static abstract interface members.
 /// Implyzer generates static companion helper class IParser to route static calls to registered implementations.
-/// </summary>public delegate bool TryParse<T>([NotNullWhen(true)] string? input, [MaybeNullWhen(false)] out T result);
+/// </summary>public delegate bool TryParse{T}([NotNullWhen(true)] string? input, [MaybeNullWhen(false)] out T result);
 [StaticAbstract("TryParse", typeof(TryParse<>), "TSelf", "T")]
 [StaticAbstract("Parse",    typeof(Parse<>),    "TSelf", "T")]
 public partial interface ICustomParsable<TSelf> where TSelf : ICustomParsable<TSelf>?;

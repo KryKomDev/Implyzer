@@ -1,9 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
-        <LangVersion>14</LangVersion>
+        <TargetFrameworks>net10.0;net5.0</TargetFrameworks>
+        <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
+        <OutputType>exe</OutputType>
 
         <LocalPackagingTest>false</LocalPackagingTest>
     </PropertyGroup>
@@ -22,9 +23,4 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
     </ItemGroup>
-
-    <ItemGroup>
-        <ProjectReference Include="..\SampleLib\SampleLib.csproj"/>
-    </ItemGroup>
-
 </Project>

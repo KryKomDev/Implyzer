@@ -14,7 +14,7 @@ namespace Implyzer;
 
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
-    private static readonly SymbolDisplayFormat FullyQualifiedFormatWithNullability =
+    private static readonly SymbolDisplayFormat FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY =
         SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
             SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions |
             SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier
@@ -138,44 +138,45 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
                 .OfType<IMethodSymbol>()
                 .Any(m => m.IsStatic && m.DeclaredAccessibility == Accessibility.Public && MethodMatchesSignature(m, delegateInvoke));
 
-            if (!matches) {
-                var returnAttributes = FormatReturnAttributes(delegateInvoke.OriginalDefinition.GetReturnTypeAttributes());
-                var returnTypeFqn    = returnAttributes + delegateInvoke.ReturnType.ToDisplayString(FullyQualifiedFormatWithNullability);
+            if (matches)
+                continue;
 
-                var paramStrings = delegateInvoke.Parameters.Select(
-                    p => {
-                        var refKind = p.RefKind switch {
-                            RefKind.Ref => "ref ",
-                            RefKind.Out => "out ",
-                            RefKind.In  => "in ",
-                            _           => p.IsParams ? "params " : ""
-                        };
+            var returnAttributes = FormatReturnAttributes(delegateInvoke.OriginalDefinition.GetReturnTypeAttributes());
+            var returnTypeFqn    = returnAttributes + delegateInvoke.ReturnType.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY);
 
-                        var attrs = FormatAttributes(p.OriginalDefinition.GetAttributes());
+            var paramStrings = delegateInvoke.Parameters.Select(
+                p => {
+                    var refKind = p.RefKind switch {
+                        RefKind.Ref => "ref ",
+                        RefKind.Out => "out ",
+                        RefKind.In  => "in ",
+                        _           => p.IsParams ? "params " : ""
+                    };
 
-                        return $"{attrs}{refKind}{p.Type.ToDisplayString(FullyQualifiedFormatWithNullability)} {p.Name}";
-                    }
-                );
+                    var attrs = FormatAttributes(p.OriginalDefinition.GetAttributes());
 
-                var paramsText = string.Join(", ", paramStrings);
+                    return $"{attrs}{refKind}{p.Type.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY)} {p.Name}";
+                }
+            );
 
-                var properties = ImmutableDictionary<string, string?>.Empty
-                    .Add("MethodName", info.MethodName)
-                    .Add("ReturnType", returnTypeFqn)
-                    .Add("Parameters", paramsText);
+            var paramsText = string.Join(", ", paramStrings);
 
-                context.ReportDiagnostic(
-                    Diagnostic.Create(
-                        Rules.StaticAbstractMethodNotImplemented,
-                        typeSymbol.Locations[0],
-                        properties,
-                        typeSymbol.Name,
-                        info.MethodName,
-                        constructedDelegate.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
-                        iface.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)
-                    )
-                );
-            }
+            var properties = ImmutableDictionary<string, string?>.Empty
+                .Add("MethodName", info.MethodName)
+                .Add("ReturnType", returnTypeFqn)
+                .Add("Parameters", paramsText);
+
+            context.ReportDiagnostic(
+                Diagnostic.Create(
+                    Rules.StaticAbstractMethodNotImplemented,
+                    typeSymbol.Locations[0],
+                    properties,
+                    typeSymbol.Name,
+                    info.MethodName,
+                    constructedDelegate.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    iface.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)
+                )
+            );
         }
     }
 
@@ -183,13 +184,10 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
         if (method.Parameters.Length != delegateInvoke.Parameters.Length)
             return false;
 
-        if (!SymbolEqualityComparer.IncludeNullability.Equals(method.ReturnType, delegateInvoke.ReturnType))
+        if (!SymbolEqualityComparer.Default.Equals(method.ReturnType, delegateInvoke.ReturnType))
             return false;
 
-        if (!AttributeListsMatch(method.OriginalDefinition.GetReturnTypeAttributes(), delegateInvoke.OriginalDefinition.GetReturnTypeAttributes()))
-            return false;
-
-        for (var i = 0; i < method.Parameters.Length; i++) {
+        for (int i = 0; i < method.Parameters.Length; i++) {
             var p1 = method.Parameters[i];
             var p2 = delegateInvoke.Parameters[i];
 
@@ -199,10 +197,7 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
             if (p1.IsParams != p2.IsParams)
                 return false;
 
-            if (!SymbolEqualityComparer.IncludeNullability.Equals(p1.Type, p2.Type))
-                return false;
-
-            if (!AttributeListsMatch(p1.OriginalDefinition.GetAttributes(), p2.OriginalDefinition.GetAttributes()))
+            if (!SymbolEqualityComparer.Default.Equals(p1.Type, p2.Type))
                 return false;
         }
 
@@ -229,16 +224,17 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
 
         var fullName = attribute.AttributeClass.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-        return fullName == "global::System.Runtime.CompilerServices.NullableAttribute"           ||
-            fullName    == "global::System.Runtime.CompilerServices.NullableContextAttribute"    ||
-            fullName    == "global::System.Runtime.CompilerServices.NullablePublicOnlyAttribute" ||
-            fullName    == "global::System.Runtime.CompilerServices.NativeIntegerAttribute"      ||
-            fullName    == "global::System.Runtime.CompilerServices.DynamicAttribute"            ||
-            fullName    == "global::System.Runtime.CompilerServices.TupleElementNamesAttribute"  ||
-            fullName    == "global::System.Runtime.CompilerServices.IsReadOnlyAttribute"         ||
-            fullName    == "global::System.ParamArrayAttribute"                                  ||
-            fullName    == "global::System.Runtime.InteropServices.OutAttribute"                 ||
-            fullName    == "global::System.Runtime.InteropServices.InAttribute";
+        return fullName 
+            is "global::System.Runtime.CompilerServices.NullableAttribute"
+            or "global::System.Runtime.CompilerServices.NullableContextAttribute"
+            or "global::System.Runtime.CompilerServices.NullablePublicOnlyAttribute"
+            or "global::System.Runtime.CompilerServices.NativeIntegerAttribute"
+            or "global::System.Runtime.CompilerServices.DynamicAttribute"
+            or "global::System.Runtime.CompilerServices.TupleElementNamesAttribute"
+            or "global::System.Runtime.CompilerServices.IsReadOnlyAttribute"
+            or "global::System.ParamArrayAttribute"
+            or "global::System.Runtime.InteropServices.OutAttribute"
+            or "global::System.Runtime.InteropServices.InAttribute";
     }
 
     private static bool AttributesAreEqual(AttributeData a1, AttributeData a2) {
@@ -326,7 +322,7 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
         if (attribute.AttributeClass == null)
             return "";
 
-        var fullName = attribute.AttributeClass.ToDisplayString(FullyQualifiedFormatWithNullability);
+        var fullName = attribute.AttributeClass.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY);
 
         if (fullName == "global::System.Runtime.CompilerServices.NullableAttribute"           ||
             fullName == "global::System.Runtime.CompilerServices.NullableContextAttribute"    ||
@@ -348,52 +344,44 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
         foreach (var namedArg in attribute.NamedArguments)
             args.Add($"{namedArg.Key} = {FormatTypedConstant(namedArg.Value)}");
 
-        if (args.Count > 0)
-            return $"[{fullName}({string.Join(", ", args)})]";
-
-        return $"[{fullName}]";
+        return args.Count > 0 
+            ? $"[{fullName}({string.Join(", ", args)})]" 
+            : $"[{fullName}]";
     }
 
     private static string FormatTypedConstant(TypedConstant constant) {
         if (constant.IsNull)
             return "null";
 
-        if (constant.Kind == TypedConstantKind.Array) {
-            var elements        = constant.Values.Select(FormatTypedConstant);
-            var arrayType       = (IArrayTypeSymbol)constant.Type!;
-            var elementTypeName = arrayType.ElementType.ToDisplayString(FullyQualifiedFormatWithNullability);
+        switch (constant.Kind) {
+            case TypedConstantKind.Array: {
+                var elements        = constant.Values.Select(FormatTypedConstant);
+                var arrayType       = (IArrayTypeSymbol)constant.Type!;
+                var elementTypeName = arrayType.ElementType.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY);
 
-            return $"new {elementTypeName}[] {{ {string.Join(", ", elements)} }}";
+                return $"new {elementTypeName}[] {{ {string.Join(", ", elements)} }}";
+            }
+            case TypedConstantKind.Type: {
+                var typeSymbol = (ITypeSymbol)constant.Value!;
+
+                return $"typeof({typeSymbol.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY)})";
+            }
+            case TypedConstantKind.Enum: {
+                return constant.Type!.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY) + "." + constant.Value;
+            }
+            case TypedConstantKind.Error:     
+            case TypedConstantKind.Primitive:
+            default:
+                return constant.Value switch {
+                    string s    => SymbolDisplay.FormatLiteral(s, true),
+                    char c      => SymbolDisplay.FormatLiteral(c, true),
+                    bool b      => b ? "true" : "false",
+                    double d    => d.ToString(System.Globalization.CultureInfo.InvariantCulture)   + "d",
+                    float f     => f.ToString(System.Globalization.CultureInfo.InvariantCulture)   + "f",
+                    decimal dec => dec.ToString(System.Globalization.CultureInfo.InvariantCulture) + "m",
+                    _           => constant.Value?.ToString() ?? "null"
+                };
         }
-
-        if (constant.Kind == TypedConstantKind.Type) {
-            var typeSymbol = (ITypeSymbol)constant.Value!;
-
-            return $"typeof({typeSymbol.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString(FullyQualifiedFormatWithNullability)})";
-        }
-
-        if (constant.Kind == TypedConstantKind.Enum)
-            return constant.Type!.ToDisplayString(FullyQualifiedFormatWithNullability) + "." + constant.Value;
-
-        if (constant.Value is string s)
-            return SymbolDisplay.FormatLiteral(s, true);
-
-        if (constant.Value is char c)
-            return SymbolDisplay.FormatLiteral(c, true);
-
-        if (constant.Value is bool b)
-            return b ? "true" : "false";
-
-        if (constant.Value is double d)
-            return d.ToString(System.Globalization.CultureInfo.InvariantCulture) + "d";
-
-        if (constant.Value is float f)
-            return f.ToString(System.Globalization.CultureInfo.InvariantCulture) + "f";
-
-        if (constant.Value is decimal dec)
-            return dec.ToString(System.Globalization.CultureInfo.InvariantCulture) + "m";
-
-        return constant.Value?.ToString() ?? "null";
     }
 
     private static bool IsPartial(INamedTypeSymbol symbol) {
@@ -427,16 +415,22 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
             if (signatureArg.Value is INamedTypeSymbol delSymbol)
                 delegateSymbol = delSymbol;
 
-            if (attribute.ConstructorArguments.Length == 3) {
-                var arg2 = attribute.ConstructorArguments[2];
-                ParseTypeParamsArray(arg2, typeParams);
-            }
-            else if (attribute.ConstructorArguments.Length == 4) {
-                var arg2 = attribute.ConstructorArguments[2];
-                targetClass = arg2.Value as INamedTypeSymbol;
+            switch (attribute.ConstructorArguments.Length) {
+                case 3: {
+                    var arg2 = attribute.ConstructorArguments[2];
+                    ParseTypeParamsArray(arg2, typeParams);
 
-                var arg3 = attribute.ConstructorArguments[3];
-                ParseTypeParamsArray(arg3, typeParams);
+                    break;
+                }
+                case 4: {
+                    var arg2 = attribute.ConstructorArguments[2];
+                    targetClass = arg2.Value as INamedTypeSymbol;
+
+                    var arg3 = attribute.ConstructorArguments[3];
+                    ParseTypeParamsArray(arg3, typeParams);
+
+                    break;
+                }
             }
         }
         else {
@@ -491,77 +485,83 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
                 return;
             }
 
-            var val = semanticModel.GetConstantValue(expr).Value as string;
-
-            if (val != null)
+            if (semanticModel.GetConstantValue(expr).Value is string val)
                 elements.Add(val);
         }
 
-        for (var i = 0; i < elements.Count; i += 2)
+        for (var i = 0; i < elements.Count; i += 2) {
             if (i + 1 < elements.Count)
                 typeParams[elements[i]] = elements[i + 1];
+        }
     }
 
     private static void ParseTypeParamsSyntax(ExpressionSyntax expr, Dictionary<string, string> typeParams, SemanticModel semanticModel) {
-        if (expr is CollectionExpressionSyntax collection) {
-            var elements = new List<string>();
+        switch (expr) {
+            case CollectionExpressionSyntax collection: {
+                var elements = new List<string>();
 
-            foreach (var element in collection.Elements)
-                if (element is ExpressionElementSyntax exprElem) {
-                    var val = semanticModel.GetConstantValue(exprElem.Expression).Value as string;
+                foreach (var element in collection.Elements) {
+                    if (element is not ExpressionElementSyntax exprElem)
+                        continue;
 
-                    if (val != null)
+                    if (semanticModel.GetConstantValue(exprElem.Expression).Value is string val)
                         elements.Add(val);
                 }
 
-            for (var i = 0; i < elements.Count; i += 2)
-                if (i + 1 < elements.Count)
-                    typeParams[elements[i]] = elements[i + 1];
-        }
-        else if (expr is ArrayCreationExpressionSyntax arrayCreate) {
-            if (arrayCreate.Initializer != null) {
+                for (var i = 0; i < elements.Count; i += 2) {
+                    if (i + 1 < elements.Count)
+                        typeParams[elements[i]] = elements[i + 1];
+                }
+
+                break;
+            }
+            case ArrayCreationExpressionSyntax { Initializer: null }: {
+                return;
+            }
+            case ArrayCreationExpressionSyntax arrayCreate: {
                 var elements = new List<string>();
 
                 foreach (var element in arrayCreate.Initializer.Expressions) {
-                    var val = semanticModel.GetConstantValue(element).Value as string;
-
-                    if (val != null)
+                    if (semanticModel.GetConstantValue(element).Value is string val)
                         elements.Add(val);
                 }
 
-                for (var i = 0; i < elements.Count; i += 2)
+                for (var i = 0; i < elements.Count; i += 2) {
                     if (i + 1 < elements.Count)
                         typeParams[elements[i]] = elements[i + 1];
+                }
+
+                break;
             }
-        }
-        else if (expr is ImplicitArrayCreationExpressionSyntax implicitArray) {
-            if (implicitArray.Initializer != null) {
+            case ImplicitArrayCreationExpressionSyntax implicitArray: {
                 var elements = new List<string>();
 
                 foreach (var element in implicitArray.Initializer.Expressions) {
-                    var val = semanticModel.GetConstantValue(element).Value as string;
-
-                    if (val != null)
+                    if (semanticModel.GetConstantValue(element).Value is string val)
                         elements.Add(val);
                 }
 
-                for (var i = 0; i < elements.Count; i += 2)
+                for (var i = 0; i < elements.Count; i += 2) {
                     if (i + 1 < elements.Count)
                         typeParams[elements[i]] = elements[i + 1];
+                }
+
+                break;
             }
         }
     }
 
     private static void ParseTypeParamsArray(TypedConstant arg, Dictionary<string, string> typeParams) {
-        if (arg.Kind == TypedConstantKind.Array)
-            for (var i = 0; i < arg.Values.Length; i += 2)
-                if (i + 1 < arg.Values.Length) {
-                    var key = arg.Values[i].Value as string;
-                    var val = arg.Values[i + 1].Value as string;
+        if (arg.Kind != TypedConstantKind.Array)
+            return;
 
-                    if (key != null && val != null)
-                        typeParams[key] = val;
-                }
+        for (var i = 0; i < arg.Values.Length; i += 2) {
+            if (i + 1 >= arg.Values.Length)
+                continue;
+
+            if (arg.Values[i].Value is string key && arg.Values[i + 1].Value is string val)
+                typeParams[key] = val;
+        }
     }
 
     private class StaticAbstractInfo {

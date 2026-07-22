@@ -1,8 +1,8 @@
-# `static abstract` Feature Simulation
+# `static abstract` Interface Support & Simulation
 
-Implyzer allows for the simulation of the `static abstract` interface members feature (which was added natively in C# 11 / .NET 7) on older target frameworks.
+Implyzer brings `static abstract` interface members to all .NET target frameworks with automatic optimization for modern C#.
 
-This feature is enabled by applying the `StaticAbstractAttribute` to a partial interface. Implyzer will generate a companion static helper class that automatically routes static method calls to the correct registered implementations.
+This feature is enabled by applying the `StaticAbstractAttribute` to a partial interface. Implyzer generates a companion static helper class that routes static method calls to the appropriate implementations—using **native C# 11 `static abstract` dispatch** on modern .NET, and seamless **simulation mode** on older target frameworks.
 
 ---
 
@@ -11,7 +11,7 @@ This feature is enabled by applying the `StaticAbstractAttribute` to a partial i
 The `StaticAbstractAttribute` constructor has the following signatures:
 
 ```csharp
-// 1. For target frameworks supporting Default Interface Methods (DIM):
+// 1. For target frameworks supporting Default Interface Methods or native static abstract members:
 public StaticAbstractAttribute(
     string methodName, 
     Type signature, 
@@ -77,20 +77,20 @@ public class Color : IParser<Color>
 
 ## 3 Invoking Generated Static Methods
 
-For every static abstract simulation, Implyzer generates two routing overloads on the companion helper class.
+For every `StaticAbstract` declaration, Implyzer generates two routing overloads on the companion helper class.
 
 ### 3.1 Generic Invocation Overload
 
-Invokes the registered implementation using a generic type parameter:
+Invokes the static method using a generic type parameter:
 
 ```csharp
-// Signature: public static bool TryParse<T>(string input, out T result)
+// Signature: public static bool TryParse<T>(string input, out T result) where T : IParser<T>
 var success = IParser.TryParse<Color>("red", out var color);
 ```
 
 ### 3.2 Non-Generic (Type-Based) Invocation Overload
 
-Invokes the registered implementation dynamically using a `System.Type` parameter. This is useful for reflection-heavy codebases, runtime factories, or deserializers where the type is only known at runtime:
+Invokes the static method dynamically using a `System.Type` parameter. This is useful for reflection-heavy codebases, runtime factories, or deserializers where the type is only known at runtime:
 
 ```csharp
 // Signature: public static bool TryParse(Type type, string input, out object? result)
@@ -101,8 +101,17 @@ var success = IParser.TryParse(typeof(Color), "red", out var colorObj);
 
 ## 4 Behind the Scenes
 
-### 4.1 Implementation Registration
-Implyzer automatically discovers implementing types at compile-time and generates a `ModuleInitializer` method. This initializer registers all implementing types with the static method registry helper upon assembly loading, preventing any manual setup.
+Implyzer automatically adapts its code generation based on the compiler's language version and target framework runtime capabilities.
 
-### 4.2 Dynamic Overload Routing
-The non-generic overload internally utilizes `DynamicInvoke`. It automatically instantiates the parameter arrays, performs the execution on the registered delegate, and copies any changes made to `out` or `ref` parameters back to the caller seamlessly.
+### 4.1 Native C# 11+ Execution (.NET 7+)
+
+When compiling with C# 11+ on a runtime supporting virtual statics in interfaces:
+- **Interface Declarations**: Implyzer generates native `public static abstract` member declarations directly inside the partial interface.
+- **Generic Invocations**: Generic helper calls like `IParser.TryParse<T>(...)` invoke `T.TryParse(...)` directly with **zero dictionary lookup or delegate allocation overhead**.
+- **Non-Generic Invocations**: Overloads accepting a `System.Type` parameter use reflection (`type.GetMethods(...)`) to locate and invoke the static method dynamically at runtime.
+
+### 4.2 Legacy Target Simulation (C# < 11 / .NET Standard 2.0)
+
+When targeting older frameworks where native `static abstract` interface members are unavailable:
+- **Implementation Registration**: Implyzer discovers implementing types at compile-time and generates a `[ModuleInitializer]` method to register implementations into a static registry (`Dictionary<Type, Delegate>`) upon assembly loading.
+- **Dynamic Overload Routing**: Generic overloads retrieve delegates from the registry, and non-generic overloads utilize `DynamicInvoke` to execute static methods at runtime.

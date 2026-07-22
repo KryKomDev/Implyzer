@@ -22,6 +22,7 @@ It allows you to specify whether an interface should be implemented only by `cla
 - **Enforce Base Class**: Require implementing classes to inherit from a specific base type.
 - **Enforce Indirect Implementation**: Make some interfaces directly unimplementable by classes, while still allowing
   them to be implemented through other interfaces.
+- **Static Abstract Members**: Support `static abstract` interface methods with zero-overhead native execution on C# 11+ and automatic simulation fallback on older target frameworks.
 - **Zero-Config**: Works out-of-the-box with standard .NET projects.
 - **Source Generator**: Automatically injects the necessary attributes into your project—no extra dependencies are
   required at runtime.
@@ -151,7 +152,32 @@ public class Generic : IGeneric<int> { }
 public class NotGeneric : INotGeneric { }
 ```
 
-### 5. Use Instead
+### 5. Static Abstract Interface Support
+
+Declare `static abstract` methods on interfaces using `[StaticAbstract]`. On C# 11+ / .NET 7+, Implyzer emits native `static abstract` interface members with zero-overhead calls; on older targets, it automatically generates companion routing helpers.
+
+```csharp
+using Implyzer;
+
+public delegate bool TryParse<T>(string input, out T? result);
+
+[StaticAbstract(nameof(TryParse), typeof(TryParse<>), "TSelf", "T")]
+public partial interface IParser<TSelf> where TSelf : IParser<TSelf> { }
+
+public class Color : IParser<Color>
+{
+    public static bool TryParse(string input, out Color? result)
+    {
+        result = new Color();
+        return true;
+    }
+}
+
+// Call via generated companion class:
+var success = IParser.TryParse<Color>("red", out var color);
+```
+
+### 6. Use Instead
 
 Create a suggestion diagnostic when using a method, class etc.
 using `[UseInstead]`
