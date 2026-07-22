@@ -7,11 +7,11 @@ using Xunit;
 namespace Implyzer.Tests;
 
 public class StaticAbstractGeneratorTests {
-    private static readonly MetadataReference CorlibReference         = MetadataReference.CreateFromFile(typeof(object).Assembly.Location);
-    private static readonly MetadataReference SystemReference         = MetadataReference.CreateFromFile(typeof(System.Collections.Generic.Dictionary<,>).Assembly.Location);
-    private static readonly MetadataReference ComponentModelReference = MetadataReference.CreateFromFile(typeof(System.ComponentModel.EditorBrowsableAttribute).Assembly.Location);
+    private static readonly MetadataReference CORLIB_REFERENCE          = MetadataReference.CreateFromFile(typeof(object).Assembly.Location);
+    private static readonly MetadataReference SYSTEM_REFERENCE          = MetadataReference.CreateFromFile(typeof(System.Collections.Generic.Dictionary<,>).Assembly.Location);
+    private static readonly MetadataReference COMPONENT_MODEL_REFERENCE = MetadataReference.CreateFromFile(typeof(System.ComponentModel.EditorBrowsableAttribute).Assembly.Location);
 
-    private static Compilation CreateCompilation(string source) {
+    private static Compilation CreateCompilation(string source, LanguageVersion languageVersion = LanguageVersion.CSharp10) {
         // Add the StaticAbstractAttribute definition to the compilation
         const string attributeSource =
             """
@@ -55,16 +55,18 @@ public class StaticAbstractGeneratorTests {
             }
             """;
 
+        var parseOptions = new CSharpParseOptions(languageVersion);
+
         return CSharpCompilation.Create(
             "TestAssembly",
             [
-                CSharpSyntaxTree.ParseText(attributeSource),
-                CSharpSyntaxTree.ParseText(source)
+                CSharpSyntaxTree.ParseText(attributeSource, parseOptions),
+                CSharpSyntaxTree.ParseText(source,          parseOptions)
             ],
             [
-                CorlibReference,
-                SystemReference,
-                ComponentModelReference
+                CORLIB_REFERENCE,
+                SYSTEM_REFERENCE,
+                COMPONENT_MODEL_REFERENCE
             ],
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
         );
@@ -175,6 +177,55 @@ public class StaticAbstractGeneratorTests {
     }
 
     [Fact]
+    public void TestGeneratorWithCSharp11NativeStaticAbstract() {
+        const string source =
+            """
+            using System;
+            using Implyzer;
+
+            namespace TestNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+
+                [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+                public class Color : IParser<Color> {
+                    public static bool TryParse(string input, out Color result) {
+                        result = new Color();
+                        return true;
+                    }
+                }
+            }
+            """;
+
+        var             compilation = CreateCompilation(source, LanguageVersion.CSharp11);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        // Should have generated: Registry file (companion class) and Forward file (interface partial part with static abstract)
+        Assert.Equal(2, runResult.GeneratedTrees.Length);
+
+        var fileNames = runResult.GeneratedTrees.Select(t => Path.GetFileName(t.FilePath)).ToList();
+        Assert.Contains("TestNamespace_IParser_Registry.g.cs", fileNames);
+        Assert.Contains("TestNamespace_IParser_Forward.g.cs",  fileNames);
+        Assert.DoesNotContain("StaticAbstractRegistry.g.cs", fileNames);
+
+        var registrySource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("TestNamespace_IParser_Registry.g.cs")).ToString();
+        Assert.Contains("public static partial class IParser",                                                                            registrySource);
+        Assert.Contains("public static bool TryParse<T>(string input, out T result) where T : global::TestNamespace.IParser<T>",          registrySource);
+        Assert.Contains("return T.TryParse(input, out result);",                                                                          registrySource);
+        Assert.Contains("public static bool TryParse(global::System.Type type, string input, out object? result)",                        registrySource);
+        Assert.Contains("type.GetMethods(global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static)", registrySource);
+
+        var forwardSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("TestNamespace_IParser_Forward.g.cs")).ToString();
+        Assert.Contains("public partial interface IParser<TSelf>",                               forwardSource);
+        Assert.Contains("public static abstract bool TryParse(string input, out TSelf result);", forwardSource);
+    }
+
+    [Fact]
     public void TestGeneratorWithAttributesNullabilityAndParams() {
         const string source =
             """
@@ -275,12 +326,12 @@ public class StaticAbstractGeneratorTests {
             """;
 
         // Compile library to MetadataReference
-        var librarySyntaxTree = CSharpSyntaxTree.ParseText(librarySource);
+        var librarySyntaxTree = CSharpSyntaxTree.ParseText(librarySource, new CSharpParseOptions(LanguageVersion.CSharp10));
 
         var libraryCompilation = CSharpCompilation.Create(
             "LibraryAssembly",
             [librarySyntaxTree],
-            [CorlibReference, SystemReference, ComponentModelReference],
+            [CORLIB_REFERENCE, SYSTEM_REFERENCE, COMPONENT_MODEL_REFERENCE],
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
         );
 
@@ -305,12 +356,12 @@ public class StaticAbstractGeneratorTests {
             }
             """;
 
-        var mainSyntaxTree = CSharpSyntaxTree.ParseText(mainSource);
+        var mainSyntaxTree = CSharpSyntaxTree.ParseText(mainSource, new CSharpParseOptions(LanguageVersion.CSharp10));
 
         var compilation = CSharpCompilation.Create(
             "TestAssembly",
             [mainSyntaxTree],
-            [CorlibReference, SystemReference, ComponentModelReference, libraryReference],
+            [CORLIB_REFERENCE, SYSTEM_REFERENCE, COMPONENT_MODEL_REFERENCE, libraryReference],
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
         );
 

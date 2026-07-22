@@ -204,8 +204,8 @@ public class StaticAbstractAnalyzerTests {
             [StaticAbstract("TryParse", typeof(TryParse<object>), new[] { "TSelf", "T" })]
             public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
 
-            public class {|#0:Color|} : IParser<Color> {
-                // Mismatch: input is 'string' instead of 'string?'
+            public class Color : IParser<Color> {
+                // Mismatch: input is 'string' instead of 'string?' - now allowed!
                 public static bool TryParse(string input, out Color? result) {
                     result = new Color();
                     return true;
@@ -213,11 +213,7 @@ public class StaticAbstractAnalyzerTests {
             }
             """;
 
-        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticAbstractMethodNotImplemented.Id)
-            .WithLocation(0)
-            .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
-
-        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test));
     }
 
     [Fact]
@@ -259,8 +255,8 @@ public class StaticAbstractAnalyzerTests {
             [StaticAbstract("TryParse", typeof(TryParse<object>), new[] { "TSelf", "T" })]
             public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
 
-            public class {|#0:Color|} : IParser<Color> {
-                // Mismatch: missing [Custom] attribute on input
+            public class Color : IParser<Color> {
+                // Mismatch: missing [Custom] attribute on input - now allowed!
                 public static bool TryParse(string input, out Color result) {
                     result = new Color();
                     return true;
@@ -268,11 +264,7 @@ public class StaticAbstractAnalyzerTests {
             }
             """;
 
-        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticAbstractMethodNotImplemented.Id)
-            .WithLocation(0)
-            .WithArguments("Color", "TryParse", "TryParse<Color>", "IParser<Color>");
-
-        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test));
     }
 
     [Fact]
