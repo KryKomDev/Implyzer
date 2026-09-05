@@ -186,4 +186,4 @@ Requirements: .NET 10.0 SDK or later.
 
 ## License
 
-MIT
+MPL-2.0
