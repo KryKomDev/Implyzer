@@ -7,3 +7,6 @@
  IMPL008 | Design         | Error    | Target class must be a class  
  IMPL009 | Implementation | Error    | Static method not implemented 
  IMPL010 | Design         | Error    | Signature must be a delegate  
+ IMPL011 | Design         | Error    | Default implementation method not found
+ IMPL012 | Design         | Error    | Default implementation signature mismatch
+ IMPL013 | Design         | Error    | Default implementation method must be static
