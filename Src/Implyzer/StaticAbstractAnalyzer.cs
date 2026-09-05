@@ -39,7 +39,7 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
 
     private static void AnalyzeInterface(SymbolAnalysisContext context, INamedTypeSymbol interfaceSymbol) {
         foreach (var attribute in interfaceSymbol.GetAttributes()) {
-            var info = GetStaticAbstractInfo(attribute, context.Compilation);
+            var info = GetStaticAbstractInfo(attribute, context.Compilation, interfaceSymbol);
 
             if (info == null)
                 continue;
@@ -93,18 +93,62 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
                         )
                     );
             }
+
+            // 3. Validate default implementation if requested
+            var isDefaultRequested = info.DefaultType != null || info.DefaultMethod != null || info.IsVirtual;
+            if (isDefaultRequested && !info.HasDefaultImplementation) {
+                var lookupType       = info.ResolvedDefaultType ?? info.DefaultType ?? info.TargetClass ?? interfaceSymbol;
+                var lookupMethodName = info.DefaultMethod ?? info.MethodName;
+
+                var candidates = lookupType.GetMembers(lookupMethodName).OfType<IMethodSymbol>().ToList();
+
+                if (candidates.Count == 0) {
+                    context.ReportDiagnostic(
+                        Diagnostic.Create(
+                            Rules.StaticAbstractDefaultMethodNotFound,
+                            attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? interfaceSymbol.Locations[0],
+                            lookupMethodName,
+                            lookupType.Name
+                        )
+                    );
+                }
+                else if (!candidates.Any(m => m.IsStatic)) {
+                    context.ReportDiagnostic(
+                        Diagnostic.Create(
+                            Rules.StaticAbstractDefaultMethodMustBeStatic,
+                            attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? interfaceSymbol.Locations[0],
+                            lookupMethodName,
+                            lookupType.Name
+                        )
+                    );
+                }
+                else {
+                    context.ReportDiagnostic(
+                        Diagnostic.Create(
+                            Rules.StaticAbstractDefaultMethodSignatureMismatch,
+                            attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? interfaceSymbol.Locations[0],
+                            lookupMethodName,
+                            lookupType.Name,
+                            info.DelegateSymbol.Name
+                        )
+                    );
+                }
+            }
         }
     }
 
     private static void AnalyzeImplementingType(SymbolAnalysisContext context, INamedTypeSymbol typeSymbol) {
         foreach (var iface in typeSymbol.AllInterfaces)
         foreach (var attribute in iface.OriginalDefinition.GetAttributes()) {
-            var info = GetStaticAbstractInfo(attribute, context.Compilation);
+            var info = GetStaticAbstractInfo(attribute, context.Compilation, iface.OriginalDefinition);
 
             if (info == null)
                 continue;
 
             if (info.DelegateSymbol.TypeKind != TypeKind.Delegate)
+                continue;
+
+            if (info.HasDefaultImplementation)
                 continue;
 
             // Build type arguments for constructed delegate
@@ -395,14 +439,26 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
         return false;
     }
 
-    private static StaticAbstractInfo? GetStaticAbstractInfo(AttributeData attribute, Compilation compilation) {
-        if (attribute.AttributeClass?.Name != "StaticAbstractAttribute" && attribute.AttributeClass?.Name != "StaticAbstract")
+    private static StaticAbstractInfo? GetStaticAbstractInfo(AttributeData attribute, Compilation compilation, INamedTypeSymbol? interfaceSymbol = null) {
+        var attrName = attribute.AttributeClass?.Name;
+        if (attrName != "StaticAbstractAttribute" && attrName != "StaticAbstract" &&
+            attrName != "StaticVirtualAttribute"  && attrName != "StaticVirtual")
             return null;
 
-        string?           methodName     = null;
+        var               isVirtual     = attrName is "StaticVirtualAttribute" or "StaticVirtual";
+        string?           methodName    = null;
         INamedTypeSymbol? delegateSymbol = null;
-        var               typeParams     = new Dictionary<string, string>();
-        INamedTypeSymbol? targetClass    = null;
+        var               typeParams    = new Dictionary<string, string>();
+        INamedTypeSymbol? targetClass   = null;
+        INamedTypeSymbol? defaultType   = null;
+        string?           defaultMethod = null;
+
+        foreach (var namedArg in attribute.NamedArguments) {
+            if (namedArg.Key == "DefaultType" && namedArg.Value.Value is INamedTypeSymbol dt)
+                defaultType = dt;
+            else if (namedArg.Key == "DefaultMethod" && namedArg.Value.Value is string dm)
+                defaultMethod = dm;
+        }
 
         if (attribute.ConstructorArguments.Length >= 2) {
             var methodNameArg = attribute.ConstructorArguments[0];
@@ -443,28 +499,40 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
             var semanticModel = compilation.GetSemanticModel(attributeSyntax.SyntaxTree);
             #pragma warning restore RS1030
 
-            // 1. methodName
-            var expr0 = attributeSyntax.ArgumentList.Arguments[0].Expression;
-            methodName = semanticModel.GetConstantValue(expr0).Value as string;
-
-            // 2. signature
-            var expr1 = attributeSyntax.ArgumentList.Arguments[1].Expression;
-
-            if (expr1 is TypeOfExpressionSyntax typeof1)
-                delegateSymbol = semanticModel.GetTypeInfo(typeof1.Type).Type as INamedTypeSymbol;
-
-            // 3. Remaining arguments
-            var argsCount = attributeSyntax.ArgumentList.Arguments.Count;
-
-            if (argsCount >= 3) {
-                var expr2 = attributeSyntax.ArgumentList.Arguments[2].Expression;
-
-                if (expr2 is TypeOfExpressionSyntax typeof2) {
-                    targetClass = semanticModel.GetTypeInfo(typeof2.Type).Type as INamedTypeSymbol;
-                    ParseParamsExpressions(attributeSyntax.ArgumentList.Arguments.Skip(3).Select(a => a.Expression), typeParams, semanticModel);
+            foreach (var arg in attributeSyntax.ArgumentList.Arguments) {
+                if (arg.NameEquals != null) {
+                    var name = arg.NameEquals.Name.Identifier.Text;
+                    if (name == "DefaultType" && arg.Expression is TypeOfExpressionSyntax typeofExpr)
+                        defaultType ??= semanticModel.GetTypeInfo(typeofExpr.Type).Type as INamedTypeSymbol;
+                    else if (name == "DefaultMethod")
+                        defaultMethod ??= semanticModel.GetConstantValue(arg.Expression).Value as string;
                 }
-                else {
-                    ParseParamsExpressions(attributeSyntax.ArgumentList.Arguments.Skip(2).Select(a => a.Expression), typeParams, semanticModel);
+            }
+
+            var positionalArgs = attributeSyntax.ArgumentList.Arguments.Where(a => a.NameEquals == null).ToList();
+
+            if (positionalArgs.Count >= 2) {
+                // 1. methodName
+                var expr0 = positionalArgs[0].Expression;
+                methodName = semanticModel.GetConstantValue(expr0).Value as string;
+
+                // 2. signature
+                var expr1 = positionalArgs[1].Expression;
+
+                if (expr1 is TypeOfExpressionSyntax typeof1)
+                    delegateSymbol = semanticModel.GetTypeInfo(typeof1.Type).Type as INamedTypeSymbol;
+
+                // 3. Remaining positional arguments
+                if (positionalArgs.Count >= 3) {
+                    var expr2 = positionalArgs[2].Expression;
+
+                    if (expr2 is TypeOfExpressionSyntax typeof2) {
+                        targetClass = semanticModel.GetTypeInfo(typeof2.Type).Type as INamedTypeSymbol;
+                        ParseParamsExpressions(positionalArgs.Skip(3).Select(a => a.Expression), typeParams, semanticModel);
+                    }
+                    else {
+                        ParseParamsExpressions(positionalArgs.Skip(2).Select(a => a.Expression), typeParams, semanticModel);
+                    }
                 }
             }
         }
@@ -472,7 +540,105 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
         if (methodName == null || delegateSymbol == null)
             return null;
 
-        return new StaticAbstractInfo(methodName, delegateSymbol, typeParams, targetClass, attribute);
+        var info = new StaticAbstractInfo(methodName, delegateSymbol, typeParams, targetClass, attribute, defaultType, defaultMethod, isVirtual);
+
+        if (interfaceSymbol != null)
+            ResolveDefaultImplementation(info, interfaceSymbol);
+
+        return info;
+    }
+
+    private static void ResolveDefaultImplementation(StaticAbstractInfo info, INamedTypeSymbol interfaceSymbol) {
+        var isDefaultRequested = info.DefaultType != null || info.DefaultMethod != null || info.IsVirtual;
+        var lookupType         = info.DefaultType ?? info.TargetClass ?? interfaceSymbol;
+        var lookupMethodName   = info.DefaultMethod ?? info.MethodName;
+
+        if (info.DefaultMethod == null) {
+            foreach (var member in lookupType.GetMembers().OfType<IMethodSymbol>()) {
+                foreach (var attr in member.GetAttributes()) {
+                    if (attr.AttributeClass?.Name is "StaticDefaultAttribute" or "StaticDefault") {
+                        if (attr.ConstructorArguments.Length == 0 || attr.ConstructorArguments[0].Value is null || Equals(attr.ConstructorArguments[0].Value, info.MethodName)) {
+                            isDefaultRequested = true;
+                            lookupMethodName   = member.Name;
+                            break;
+                        }
+                    }
+                }
+                if (lookupMethodName != info.MethodName) break;
+            }
+        }
+
+        if (!isDefaultRequested)
+            return;
+
+        info.ResolvedDefaultType = lookupType;
+
+        var candidates     = lookupType.GetMembers(lookupMethodName).OfType<IMethodSymbol>().ToList();
+        var matchingMethod = candidates.FirstOrDefault(m => m.IsStatic && DefaultMethodMatchesSignature(m, info.DelegateSymbol, interfaceSymbol, info.TypeParams));
+
+        if (matchingMethod != null) {
+            info.HasDefaultImplementation = true;
+            info.DefaultMethodSymbol      = matchingMethod;
+        }
+    }
+
+    private static bool DefaultMethodMatchesSignature(
+        IMethodSymbol              method,
+        INamedTypeSymbol           delegateSymbol,
+        INamedTypeSymbol           interfaceSymbol,
+        Dictionary<string, string> typeParams
+    ) {
+        var delegateDef = delegateSymbol.OriginalDefinition;
+        var typeArgs    = new ITypeSymbol[delegateDef.TypeParameters.Length];
+
+        for (var i = 0; i < delegateDef.TypeParameters.Length; i++) {
+            var          dtp        = delegateDef.TypeParameters[i];
+            ITypeSymbol? mappedType = null;
+
+            for (var j = 0; j < interfaceSymbol.OriginalDefinition.TypeParameters.Length; j++) {
+                var itp = interfaceSymbol.OriginalDefinition.TypeParameters[j];
+
+                if (typeParams.TryGetValue(itp.Name, out var targetName) && targetName == dtp.Name) {
+                    mappedType = itp;
+                    break;
+                }
+            }
+
+            typeArgs[i] = mappedType ?? dtp;
+        }
+
+        var constructedDelegate = delegateDef.TypeParameters.Length > 0
+            ? delegateDef.Construct(typeArgs)
+            : delegateDef;
+        var expectedInvoke = constructedDelegate.DelegateInvokeMethod;
+        if (expectedInvoke == null)
+            return false;
+
+        if (method.Parameters.Length != expectedInvoke.Parameters.Length)
+            return false;
+
+        if (method.IsGenericMethod) {
+            ITypeSymbol[] methodTypeArgs;
+            if (method.TypeParameters.Length == typeArgs.Length) {
+                methodTypeArgs = typeArgs;
+            }
+            else if (method.TypeParameters.Length == interfaceSymbol.OriginalDefinition.TypeParameters.Length) {
+                methodTypeArgs = interfaceSymbol.OriginalDefinition.TypeParameters.Cast<ITypeSymbol>().ToArray();
+            }
+            else {
+                return false;
+            }
+
+            try {
+                var constructedMethod = method.Construct(methodTypeArgs);
+                return MethodMatchesSignature(constructedMethod, expectedInvoke);
+            }
+            catch {
+                return false;
+            }
+        }
+
+        return MethodMatchesSignature(method, expectedInvoke);
     }
 
     private static void ParseParamsExpressions(IEnumerable<ExpressionSyntax> expressions, Dictionary<string, string> typeParams, SemanticModel semanticModel) {
@@ -565,18 +731,36 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
     }
 
     private class StaticAbstractInfo {
-        public string                     MethodName     { get; }
-        public INamedTypeSymbol           DelegateSymbol { get; }
-        public Dictionary<string, string> TypeParams     { get; }
-        public INamedTypeSymbol?          TargetClass    { get; }
-        public AttributeData              AttributeData  { get; }
+        public string                     MethodName               { get; }
+        public INamedTypeSymbol           DelegateSymbol           { get; }
+        public Dictionary<string, string> TypeParams               { get; }
+        public INamedTypeSymbol?          TargetClass              { get; }
+        public AttributeData              AttributeData            { get; }
+        public INamedTypeSymbol?          DefaultType              { get; }
+        public string?                    DefaultMethod            { get; }
+        public bool                       IsVirtual                { get; }
+        public bool                       HasDefaultImplementation { get; set; }
+        public IMethodSymbol?             DefaultMethodSymbol      { get; set; }
+        public INamedTypeSymbol?          ResolvedDefaultType      { get; set; }
 
-        public StaticAbstractInfo(string methodName, INamedTypeSymbol delegateSymbol, Dictionary<string, string> typeParams, INamedTypeSymbol? targetClass, AttributeData attributeData) {
+        public StaticAbstractInfo(
+            string                     methodName,
+            INamedTypeSymbol           delegateSymbol,
+            Dictionary<string, string> typeParams,
+            INamedTypeSymbol?          targetClass,
+            AttributeData              attributeData,
+            INamedTypeSymbol?          defaultType,
+            string?                    defaultMethod,
+            bool                       isVirtual
+        ) {
             MethodName     = methodName;
             DelegateSymbol = delegateSymbol;
             TypeParams     = typeParams;
             TargetClass    = targetClass;
             AttributeData  = attributeData;
+            DefaultType    = defaultType;
+            DefaultMethod  = defaultMethod;
+            IsVirtual      = isVirtual;
         }
     }
 }

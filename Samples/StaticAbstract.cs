@@ -15,14 +15,29 @@ public delegate bool TryParse<T>([NotNullWhen(true)] string? input, [MaybeNullWh
 public delegate T Parse<T>([NotNullWhen(true)] string? input);
 
 /// <summary>
-/// Illustrates [StaticAbstract]. Simulates C# 11 static abstract interface members.
-/// Implyzer generates static companion helper class IParser to route static calls to registered implementations.
-/// </summary>public delegate bool TryParse{T}([NotNullWhen(true)] string? input, [MaybeNullWhen(false)] out T result);
-[StaticAbstract("TryParse", typeof(TryParse<>), "TSelf", "T")]
-[StaticAbstract("Parse",    typeof(Parse<>),    "TSelf", "T")]
-public partial interface ICustomParsable<TSelf> where TSelf : ICustomParsable<TSelf>?;
+/// Defaults for ICustomParsable static virtual members.
+/// </summary>
+public static class CustomParsableDefaults {
+    public static T Parse<T>([NotNullWhen(true)] string? input) where T : ICustomParsable<T> {
+        if (ICustomParsable.TryParse<T>(input, out var result)) {
+            return result;
+        }
 
-// VALID: True implements ICustomParsable<True> and provides the matching static method.
+        throw new FormatException($"Cannot parse '{input}' as {typeof(T).Name}");
+    }
+}
+
+/// <summary>
+/// Illustrates [StaticAbstract] and [StaticVirtual].
+/// In C# 11+, emits native static abstract/virtual interface members with default implementations.
+/// In C# &lt; 11, generates static companion helper class to route static calls to implementations with fallback.
+/// </summary>
+[StaticAbstract("TryParse", typeof(TryParse<>), "TSelf", "T")]
+[StaticVirtual("Parse", typeof(Parse<>), "TSelf", "T", DefaultType = typeof(CustomParsableDefaults))]
+public partial interface ICustomParsable<TSelf> where TSelf : ICustomParsable<TSelf>;
+
+// VALID: True implements ICustomParsable<True> and provides TryParse.
+// Parse is omitted: it uses the default implementation provided by CustomParsableDefaults!
 public class True : ICustomParsable<True> {
 
     public static bool TryParse([NotNullWhen(true)] string? input, [MaybeNullWhen(false)] out True result) {
@@ -37,15 +52,11 @@ public class True : ICustomParsable<True> {
         return false;
     }
 
-    public static True Parse([NotNullWhen(true)] string? input) =>
-        TryParse(input, out var result)
-            ? result
-            : throw new ArgumentException();
-
     public override string ToString() => "true";
 }
 
-// VALID: False implements ICustomParsable<False> and provides the matching static method.
+// VALID: False implements ICustomParsable<False> and provides TryParse.
+// Parse is explicitly overridden with custom logic.
 public class False : ICustomParsable<False> {
 
     public static bool TryParse([NotNullWhen(true)] string? input, [MaybeNullWhen(false)] out False result) {
@@ -62,8 +73,8 @@ public class False : ICustomParsable<False> {
 
     public static False Parse([NotNullWhen(true)] string? input) =>
         TryParse(input, out var result)
-            ? result
-            : throw new ArgumentException();
+            ? result!
+            : throw new ArgumentException($"Invalid false string: '{input}'");
 
     public override string ToString() => "false";
 }
@@ -100,5 +111,16 @@ public class Program {
         // this will fail
         var nonGenericFail = ICustomParsable.TryParse(typeof(False), "no", out var nonGenericFalseResult);
         Console.WriteLine($"Non-generic TryParse ('no' -> Implyzer.Sample.False): {nonGenericFail}, Result: {nonGenericFalseResult}");
+
+
+        // === Option 3: Default implementation vs Overridden implementation ===
+
+        // True uses the default implementation in CustomParsableDefaults.Parse:
+        var trueParsed = ICustomParsable.Parse<True>("true");
+        Console.WriteLine($"Default Parse ('true' -> Implyzer.Sample.True): {trueParsed}");
+
+        // False uses its explicit override:
+        var falseParsed = ICustomParsable.Parse<False>("false");
+        Console.WriteLine($"Overridden Parse ('false' -> Implyzer.Sample.False): {falseParsed}");
     }
 }

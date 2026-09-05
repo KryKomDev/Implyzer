@@ -152,16 +152,28 @@ public class Generic : IGeneric<int> { }
 public class NotGeneric : INotGeneric { }
 ```
 
-### 5. Static Abstract Interface Support
+### 5. Static Abstract & Static Virtual Members
 
-Declare `static abstract` methods on interfaces using `[StaticAbstract]`. On C# 11+ / .NET 7+, Implyzer emits native `static abstract` interface members with zero-overhead calls; on older targets, it automatically generates companion routing helpers.
+Declare `static abstract` or `static virtual` methods on interfaces using `[StaticAbstract]` or `[StaticVirtual]`. On C# 11+ / .NET 7+, Implyzer emits native `static abstract` and `static virtual` interface members with zero-overhead calls; on older targets, it automatically generates companion routing helpers with fallback dispatch.
 
 ```csharp
 using Implyzer;
 
 public delegate bool TryParse<T>(string input, out T? result);
+public delegate T Parse<T>(string input);
+
+public static class ParserDefaults
+{
+    public static T Parse<T>(string input) where T : IParser<T>
+    {
+        if (IParser.TryParse<T>(input, out var result))
+            return result!;
+        throw new FormatException();
+    }
+}
 
 [StaticAbstract(nameof(TryParse), typeof(TryParse<>), "TSelf", "T")]
+[StaticVirtual(nameof(Parse), typeof(Parse<>), "TSelf", "T", DefaultType = typeof(ParserDefaults))]
 public partial interface IParser<TSelf> where TSelf : IParser<TSelf> { }
 
 public class Color : IParser<Color>
@@ -171,10 +183,12 @@ public class Color : IParser<Color>
         result = new Color();
         return true;
     }
+    // Parse is optional: uses default implementation from ParserDefaults!
 }
 
 // Call via generated companion class:
 var success = IParser.TryParse<Color>("red", out var color);
+var parsed  = IParser.Parse<Color>("red"); // invokes default implementation
 ```
 
 ### 6. Use Instead

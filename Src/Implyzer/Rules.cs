@@ -104,6 +104,36 @@ internal static class Rules {
         "The signature parameter of [StaticAbstract] must be a delegate type."
     );
 
+    internal static readonly DiagnosticDescriptor StaticAbstractDefaultMethodNotFound = new(
+        "IMPL011",
+        "Default implementation method not found",
+        "Default implementation method '{0}' was not found on type '{1}'",
+        "Design",
+        DiagnosticSeverity.Error,
+        true,
+        "Default implementation method specified in [StaticAbstract] or [StaticVirtual] was not found."
+    );
+
+    internal static readonly DiagnosticDescriptor StaticAbstractDefaultMethodSignatureMismatch = new(
+        "IMPL012",
+        "Default implementation signature mismatch",
+        "Default implementation method '{0}' on type '{1}' does not match delegate signature '{2}'",
+        "Design",
+        DiagnosticSeverity.Error,
+        true,
+        "The default implementation method must match the signature of the delegate specified in [StaticAbstract] or [StaticVirtual]."
+    );
+
+    internal static readonly DiagnosticDescriptor StaticAbstractDefaultMethodMustBeStatic = new(
+        "IMPL013",
+        "Default implementation method must be static",
+        "Default implementation method '{0}' on type '{1}' must be static",
+        "Design",
+        DiagnosticSeverity.Error,
+        true,
+        "The default implementation method specified in [StaticAbstract] or [StaticVirtual] must be static."
+    );
+
     internal static ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => [
         RefVal,
         Type,
@@ -114,6 +144,9 @@ internal static class Rules {
         StaticAbstractTargetClassNotPartial,
         StaticAbstractTargetClassMustBeClass,
         StaticAbstractMethodNotImplemented,
-        StaticAbstractSignatureNotDelegate
+        StaticAbstractSignatureNotDelegate,
+        StaticAbstractDefaultMethodNotFound,
+        StaticAbstractDefaultMethodSignatureMismatch,
+        StaticAbstractDefaultMethodMustBeStatic
     ];
 }

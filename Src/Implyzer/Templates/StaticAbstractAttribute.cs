@@ -20,12 +20,14 @@ namespace Implyzer {
     /// for the `static abstract` feature in C# for older runtime versions.
     /// </summary>
     [AttributeUsage(AttributeTargets.Interface, Inherited = false, AllowMultiple = true)]
-    public sealed class StaticAbstractAttribute : Attribute {
+    public class StaticAbstractAttribute : Attribute {
 
-        public Type?                      TargetClass { get; }
-        public string                     MethodName  { get; }
-        public Type                       Signature   { get; }
-        public Dictionary<string, string> TypeParams  { get; }
+        public Type?                      TargetClass   { get; }
+        public string                     MethodName    { get; }
+        public Type                       Signature     { get; }
+        public Dictionary<string, string> TypeParams    { get; }
+        public Type?                      DefaultType   { get; set; }
+        public string?                    DefaultMethod { get; set; }
 
         public StaticAbstractAttribute(string methodName, Type signature, params string[] typeParams) {
             MethodName  = methodName;
