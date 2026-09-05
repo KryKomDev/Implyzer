@@ -14,7 +14,7 @@
         <Authors>KryKomDev</Authors>
         <Description>A Roslyn analyzer for restraining interface implementations</Description>
         <PackageIcon>Package-Icon.png</PackageIcon>
-        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>
         <PackageReadmeFile>Package-Readme.md</PackageReadmeFile>
         <RepositoryUrl>https://github.com/KryKomDev/Implyzer</RepositoryUrl>
     </PropertyGroup>

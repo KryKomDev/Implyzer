@@ -79,6 +79,22 @@ public class False : ICustomParsable<False> {
     public override string ToString() => "false";
 }
 
+// VALID: Open generic type Box<T> implements ICustomParsable<Box<T>>.
+// Implyzer's static abstract simulator registers and resolves open generic types seamlessly!
+public class Box<T> : ICustomParsable<Box<T>> {
+    public static bool TryParse([NotNullWhen(true)] string? input, [MaybeNullWhen(false)] out Box<T> result) {
+        if (!string.IsNullOrEmpty(input)) {
+            result = new Box<T>();
+            return true;
+        }
+
+        result = null;
+        return false;
+    }
+
+    public override string ToString() => $"Box<{typeof(T).Name}>";
+}
+
 // INVALID: Dog implements ICustomParsable<Dog> but does NOT provide the static TryParse method.
 // Uncomment to see analyzer error IMPL009:
 //     "Type 'Dog' must implement public static method 'TryParse' matching signature of delegate
@@ -122,5 +138,14 @@ public class Program {
         // False uses its explicit override:
         var falseParsed = ICustomParsable.Parse<False>("false");
         Console.WriteLine($"Overridden Parse ('false' -> Implyzer.Sample.False): {falseParsed}");
+
+
+        // === Option 4: Open generic type support in static abstract members & simulator ===
+
+        var boxGenericSuccess = ICustomParsable.TryParse<Box<int>>("box", out var boxIntResult);
+        Console.WriteLine($"Open generic TryParse ('box' -> Box<int>): {boxGenericSuccess}, Result: {boxIntResult}");
+
+        var boxNonGenericSuccess = ICustomParsable.TryParse(typeof(Box<string>), "box", out var boxStringResult);
+        Console.WriteLine($"Open generic non-generic TryParse ('box' -> Box<string>): {boxNonGenericSuccess}, Result: {boxStringResult}");
     }
 }

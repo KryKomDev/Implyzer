@@ -546,4 +546,44 @@ public class StaticAbstractAnalyzerTests {
 
         await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
+
+    [Fact]
+    public async Task TestOpenGenericImplementingType_Success() {
+        var test =
+            """
+            public delegate bool TryParse<T>(string input, out T result);
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+            public class Box<T> : IParser<Box<T>> {
+                public static bool TryParse(string input, out Box<T> result) {
+                    result = new Box<T>();
+                    return true;
+                }
+            }
+            """;
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test));
+    }
+
+    [Fact]
+    public async Task TestOpenGenericImplementingType_MissingMethod_Diagnostic() {
+        var test =
+            """
+            public delegate bool TryParse<T>(string input, out T result);
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+            public class {|#0:Box|}<T> : IParser<Box<T>> {
+            }
+            """;
+
+        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticAbstractMethodNotImplemented.Id)
+            .WithLocation(0)
+            .WithArguments("Box", "TryParse", "TryParse<Box<T>>", "IParser<Box<T>>");
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
 }

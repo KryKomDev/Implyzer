@@ -371,15 +371,19 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
             else if (tp.HasValueTypeConstraint)
                 constraints.Add("struct");
 
-            foreach (var ct in tp.ConstraintTypes)
-                constraints.Add(ct.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY));
+            foreach (var ct in tp.ConstraintTypes) {
+                var ctStr = ct.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY);
+
+                if (!constraints.Any(c => c.TrimEnd('?') == ctStr.TrimEnd('?')))
+                    constraints.Add(ctStr);
+            }
 
             var requiresInterfaceConstraint = isCSharp11OrGreater || (info.HasDefaultImplementation && info.DefaultMethodSymbol?.IsGenericMethod == true);
 
             if (requiresInterfaceConstraint && tp.Name == lookupTypeName) {
                 var interfaceFqn = GetConstructedInterfaceFqn(info, lookupTypeName);
 
-                if (!constraints.Contains(interfaceFqn))
+                if (!constraints.Any(c => c.TrimEnd('?') == interfaceFqn.TrimEnd('?')))
                     constraints.Add(interfaceFqn);
             }
 
@@ -469,14 +473,50 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                 $$"""
 
                           private static readonly global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Delegate> _{{methodName}}Registry = new();
+                          private static readonly global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<global::System.Type, global::System.Delegate>> _{{methodName}}OpenRegistry = new();
 
                           [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
                           public static void G_Register_{{methodName}}(global::System.Type type, global::System.Delegate impl) {
-                              _{{methodName}}Registry[type] = impl;
+                              lock (_{{methodName}}Registry) {
+                                  _{{methodName}}Registry[type] = impl;
+                              }
                           }
-                          
+
+                          [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+                          public static void G_RegisterOpen_{{methodName}}(global::System.Type openType, global::System.Func<global::System.Type, global::System.Delegate> factory) {
+                              lock (_{{methodName}}OpenRegistry) {
+                                  _{{methodName}}OpenRegistry[openType] = factory;
+                              }
+                          }
+
+                          private static bool TryResolveOpen_{{methodName}}(global::System.Type type, out global::System.Delegate? impl) {
+                              if (type.IsGenericType) {
+                                  var openDef = type.GetGenericTypeDefinition();
+                                  global::System.Func<global::System.Type, global::System.Delegate>? factory;
+                                  lock (_{{methodName}}OpenRegistry) {
+                                      _{{methodName}}OpenRegistry.TryGetValue(openDef, out factory);
+                                  }
+                                  if (factory != null) {
+                                      impl = factory(type);
+                                      if (impl != null) {
+                                          lock (_{{methodName}}Registry) {
+                                              _{{methodName}}Registry[type] = impl;
+                                          }
+                                          return true;
+                                      }
+                                  }
+                              }
+                              impl = null;
+                              return false;
+                          }
+
                           {{returnAttributes}}public static {{returnTypeStr}} {{methodName}}{{typeParamsStr}}({{paramList}}){{constraintsStr}} {
-                              if (_{{methodName}}Registry.TryGetValue(typeof({{lookupTypeName}}), out var impl)) {
+                              global::System.Delegate? impl;
+                              var found = false;
+                              lock (_{{methodName}}Registry) {
+                                  found = _{{methodName}}Registry.TryGetValue(typeof({{lookupTypeName}}), out impl);
+                              }
+                              if (found || TryResolveOpen_{{methodName}}(typeof({{lookupTypeName}}), out impl)) {
                   {{body}}
                               }
                   {{notFoundBody}}
@@ -567,7 +607,12 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                 $$"""
 
                           {{nonGenericReturnAttributes}}public static {{nonGenericReturnTypeStr}} {{methodName}}({{nonGenericParamList}}) {
-                              if (_{{methodName}}Registry.TryGetValue(type, out var impl)) {
+                              global::System.Delegate? impl;
+                              var found = false;
+                              lock (_{{methodName}}Registry) {
+                                  found = _{{methodName}}Registry.TryGetValue(type, out impl);
+                              }
+                              if (found || TryResolveOpen_{{methodName}}(type, out impl)) {
                                   var args = new object?[] { {{argListWithoutRef}} };
                   {{body}}
                               }
@@ -711,9 +756,6 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
         var registrationStatements = new List<string>();
 
         foreach (var type in types.Distinct(SymbolEqualityComparer.Default).Cast<INamedTypeSymbol>()) {
-            if (type.TypeParameters.Length > 0)
-                continue;
-
             foreach (var iface in type.AllInterfaces)
             foreach (var attribute in iface.OriginalDefinition.GetAttributes()) {
                 var info = GetStaticAbstractInfo(attribute, iface, compilation);
@@ -761,10 +803,50 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                     : $"{info.InterfaceSymbol.ContainingNamespace
                         .ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY)}.{info.InterfaceSymbol.Name}";
 
-                var delegateTypeStr = constructedDelegate.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY);
-                var methodGroupStr  = $"{type.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY)}.{info.MethodName}";
+                var isOpenGeneric = type.IsGenericType || type.TypeParameters.Length > 0;
 
-                registrationStatements.Add($"            {registryClassFqn}.G_Register_{info.MethodName}(typeof({type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), new {delegateTypeStr}({methodGroupStr}));");
+                if (!isOpenGeneric) {
+                    var delegateTypeStr = constructedDelegate.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY);
+                    var methodGroupStr  = $"{type.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY)}.{info.MethodName}";
+
+                    registrationStatements.Add($"            {registryClassFqn}.G_Register_{info.MethodName}(typeof({type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), new {delegateTypeStr}({methodGroupStr}));");
+                }
+                else {
+                    var openTypeSyntax = GetOpenGenericTypeSyntax(type);
+                    string delegateTypeExpr;
+
+                    if (info.DelegateSymbol.TypeParameters.Length == 0) {
+                        delegateTypeExpr = $"typeof({info.DelegateSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})";
+                    }
+                    else {
+                        var openDelegateSyntax = GetOpenGenericTypeSyntax(info.DelegateSymbol);
+                        var runtimeTypeArgs    = typeArgs.Select(ta => GetRuntimeTypeExpression(ta, type));
+                        delegateTypeExpr       = $"typeof({openDelegateSyntax}).MakeGenericType({string.Join(", ", runtimeTypeArgs)})";
+                    }
+
+                    var paramLen = delegateInvoke.Parameters.Length;
+
+                    var factoryLambda =
+                        $$"""
+                        closedType => {
+                                        var methods = closedType.GetMethods(global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.Static);
+                                        var delegateType = {{delegateTypeExpr}};
+                                        foreach (var m in methods) {
+                                            if (m.Name == "{{info.MethodName}}" && m.GetParameters().Length == {{paramLen}}) {
+                                                try {
+                                                    return global::System.Delegate.CreateDelegate(delegateType, m);
+                                                }
+                                                catch {
+                                                    continue;
+                                                }
+                                            }
+                                        }
+                                        return null!;
+                                    }
+                        """;
+
+                    registrationStatements.Add($"            {registryClassFqn}.G_RegisterOpen_{info.MethodName}(typeof({openTypeSyntax}), {factoryLambda});");
+                }
             }
         }
 
@@ -1267,6 +1349,86 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
             if (arg.Values[i].Value is string key && arg.Values[i + 1].Value is string val)
                 typeParams[key] = val;
         }
+    }
+
+    private static List<ITypeParameterSymbol> GetAllTypeParameters(INamedTypeSymbol type) {
+        var list = new List<ITypeParameterSymbol>();
+
+        if (type.ContainingType != null)
+            list.AddRange(GetAllTypeParameters(type.ContainingType));
+
+        list.AddRange(type.TypeParameters);
+
+        return list;
+    }
+
+    private static string GetOpenGenericTypeSyntax(INamedTypeSymbol type) {
+        var original = type.OriginalDefinition;
+
+        if (original.ContainingType != null) {
+            var parent   = GetOpenGenericTypeSyntax(original.ContainingType);
+            var arityStr = original.Arity > 0 ? $"<{new string(',', original.Arity - 1)}>" : "";
+
+            return $"{parent}.{original.Name}{arityStr}";
+        }
+
+        var commas = original.Arity > 0 ? $"<{new string(',', original.Arity - 1)}>" : "";
+
+        if (original.ContainingNamespace.IsGlobalNamespace)
+            return $"global::{original.Name}{commas}";
+
+        var ns = original.ContainingNamespace.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        return $"{ns}.{original.Name}{commas}";
+    }
+
+    private static string GetRuntimeTypeExpression(ITypeSymbol typeArg, INamedTypeSymbol implementingType) {
+        if (SymbolEqualityComparer.Default.Equals(typeArg, implementingType))
+            return "closedType";
+
+        if (typeArg is INamedTypeSymbol ntsSelf && SymbolEqualityComparer.Default.Equals(ntsSelf.OriginalDefinition, implementingType.OriginalDefinition)) {
+            var matchesArgsInOrder = true;
+
+            if (ntsSelf.TypeArguments.Length == implementingType.TypeParameters.Length) {
+                for (var k = 0; k < ntsSelf.TypeArguments.Length; k++) {
+                    if (ntsSelf.TypeArguments[k].Name != implementingType.TypeParameters[k].Name) {
+                        matchesArgsInOrder = false;
+
+                        break;
+                    }
+                }
+            }
+            else {
+                matchesArgsInOrder = false;
+            }
+
+            if (matchesArgsInOrder)
+                return "closedType";
+        }
+
+        if (typeArg is ITypeParameterSymbol tp) {
+            var allTypeParams = GetAllTypeParameters(implementingType);
+            var idx           = allTypeParams.FindIndex(p => SymbolEqualityComparer.Default.Equals(p, tp) || p.Name == tp.Name);
+
+            if (idx >= 0)
+                return $"closedType.GetGenericArguments()[{idx}]";
+        }
+
+        if (typeArg is INamedTypeSymbol nts) {
+            if (nts.IsGenericType) {
+                var openSyntax = GetOpenGenericTypeSyntax(nts);
+                var innerArgs  = nts.TypeArguments.Select(a => GetRuntimeTypeExpression(a, implementingType));
+
+                return $"typeof({openSyntax}).MakeGenericType({string.Join(", ", innerArgs)})";
+            }
+
+            return $"typeof({nts.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})";
+        }
+
+        if (typeArg is IArrayTypeSymbol arr)
+            return $"{GetRuntimeTypeExpression(arr.ElementType, implementingType)}.MakeArrayType()";
+
+        return $"typeof({typeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})";
     }
 
     private static string ToNonGenericTypeString(ITypeSymbol type, string typeParamName) {

@@ -171,6 +171,7 @@ When compiling with C# 11+ on a runtime supporting virtual statics in interfaces
 
 When targeting older frameworks where native `static abstract` interface members are unavailable:
 - **Implementation Registration**: Implyzer discovers implementing types at compile-time and generates a `[ModuleInitializer]` method to register implementations into a static registry (`Dictionary<Type, Delegate>`) upon assembly loading.
+- **Open Generic Support**: Open generic types (e.g., `Box<T> : IParser<Box<T>>` or `Pair<T1, T2> : IParser<Pair<T1, T2>>`) are registered via an open generic factory registry. When a closed generic type like `Box<int>` or `Box<string>` is invoked for the first time, Implyzer dynamically constructs and caches the closed delegate, providing full simulator compatibility for open generics with subsequent O(1) fast-path lookups.
 - **Dynamic Overload Routing**: Generic overloads retrieve delegates from the registry, and non-generic overloads utilize `DynamicInvoke` to execute static methods at runtime.
 
 ### 4.3 Default Implementation Dispatch
