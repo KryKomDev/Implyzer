@@ -375,7 +375,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
 
             foreach (var info in infos) {
                 var hasExternalRegistrations = conformingExternalTypes.TryGetValue(info.InterfaceSymbol, out var extList) && extList.Count > 0;
-                GenerateRegistryContent(sb, info, isCSharp11OrGreater, hasExternalRegistrations);
+                GenerateRegistryContent(sb, info, isCSharp11OrGreater, hasExternalRegistrations, infos);
             }
 
             sb.AppendLine(
@@ -458,7 +458,13 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
         return $"{ifaceName}<{string.Join(", ", typeArgs)}>";
     }
 
-    private static void GenerateRegistryContent(StringBuilder sb, StaticAbstractInfo info, bool isCSharp11OrGreater, bool hasExternalRegistrations) {
+    private static void GenerateRegistryContent(
+        StringBuilder            sb,
+        StaticAbstractInfo       info,
+        bool                     isCSharp11OrGreater,
+        bool                     hasExternalRegistrations,
+        List<StaticAbstractInfo> allInfos
+    ) {
         var delegateSymbol = info.DelegateSymbol.OriginalDefinition;
         var invokeMethod   = delegateSymbol.DelegateInvokeMethod;
 
@@ -466,6 +472,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
             return;
 
         var methodName       = info.MethodName;
+        var registryName     = GetRegistryIdentifier(info, allInfos);
         var castType         = delegateSymbol.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY);
         var returnAttributes = FormatReturnAttributes(invokeMethod.OriginalDefinition.GetReturnTypeAttributes());
         var returnTypeStr    = invokeMethod.ReturnType.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY);
@@ -633,35 +640,35 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
             sb.AppendLine(
                 $$"""
 
-                          private static readonly global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Delegate> _{{methodName}}Registry = new();
-                          private static readonly global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<global::System.Type, global::System.Delegate>> _{{methodName}}OpenRegistry = new();
+                          private static readonly global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Delegate> _{{registryName}}Registry = new();
+                          private static readonly global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Func<global::System.Type, global::System.Delegate>> _{{registryName}}OpenRegistry = new();
 
                           [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-                          public static void G_Register_{{methodName}}(global::System.Type type, global::System.Delegate impl) {
-                              lock (_{{methodName}}Registry) {
-                                  _{{methodName}}Registry[type] = impl;
+                          public static void G_Register_{{registryName}}(global::System.Type type, global::System.Delegate impl) {
+                              lock (_{{registryName}}Registry) {
+                                  _{{registryName}}Registry[type] = impl;
                               }
                           }
 
                           [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-                          public static void G_RegisterOpen_{{methodName}}(global::System.Type openType, global::System.Func<global::System.Type, global::System.Delegate> factory) {
-                              lock (_{{methodName}}OpenRegistry) {
-                                  _{{methodName}}OpenRegistry[openType] = factory;
+                          public static void G_RegisterOpen_{{registryName}}(global::System.Type openType, global::System.Func<global::System.Type, global::System.Delegate> factory) {
+                              lock (_{{registryName}}OpenRegistry) {
+                                  _{{registryName}}OpenRegistry[openType] = factory;
                               }
                           }
 
-                          private static bool TryResolveOpen_{{methodName}}(global::System.Type type, out global::System.Delegate? impl) {
+                          private static bool TryResolveOpen_{{registryName}}(global::System.Type type, out global::System.Delegate? impl) {
                               if (type.IsGenericType) {
                                   var openDef = type.GetGenericTypeDefinition();
                                   global::System.Func<global::System.Type, global::System.Delegate>? factory;
-                                  lock (_{{methodName}}OpenRegistry) {
-                                      _{{methodName}}OpenRegistry.TryGetValue(openDef, out factory);
+                                  lock (_{{registryName}}OpenRegistry) {
+                                      _{{registryName}}OpenRegistry.TryGetValue(openDef, out factory);
                                   }
                                   if (factory != null) {
                                       impl = factory(type);
                                       if (impl != null) {
-                                          lock (_{{methodName}}Registry) {
-                                              _{{methodName}}Registry[type] = impl;
+                                          lock (_{{registryName}}Registry) {
+                                              _{{registryName}}Registry[type] = impl;
                                           }
                                           return true;
                                       }
@@ -674,10 +681,10 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                           {{returnAttributes}}public static {{returnTypeStr}} {{methodName}}{{typeParamsStr}}({{paramList}}){{constraintsStr}} {
                               global::System.Delegate? impl;
                               var found = false;
-                              lock (_{{methodName}}Registry) {
-                                  found = _{{methodName}}Registry.TryGetValue(typeof({{lookupTypeName}}), out impl);
+                              lock (_{{registryName}}Registry) {
+                                  found = _{{registryName}}Registry.TryGetValue(typeof({{lookupTypeName}}), out impl);
                               }
-                              if (found || TryResolveOpen_{{methodName}}(typeof({{lookupTypeName}}), out impl)) {
+                              if (found || TryResolveOpen_{{registryName}}(typeof({{lookupTypeName}}), out impl)) {
                   {{body}}
                               }
                   {{notFoundBody}}
@@ -790,10 +797,10 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                           {{nonGenericReturnAttributes}}public static {{nonGenericReturnTypeStr}} {{methodName}}({{nonGenericParamList}}) {
                               global::System.Delegate? impl;
                               var found = false;
-                              lock (_{{methodName}}Registry) {
-                                  found = _{{methodName}}Registry.TryGetValue(type, out impl);
+                              lock (_{{registryName}}Registry) {
+                                  found = _{{registryName}}Registry.TryGetValue(type, out impl);
                               }
-                              if (found || TryResolveOpen_{{methodName}}(type, out impl)) {
+                              if (found || TryResolveOpen_{{registryName}}(type, out impl)) {
                                   var args = new object?[] { {{argListWithoutRef}} };
                   {{body}}
                               }
@@ -802,6 +809,77 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                   """
             );
         }
+    }
+
+    private static string GetRegistryIdentifier(StaticAbstractInfo info, IEnumerable<StaticAbstractInfo> allInfos) {
+        var matching = allInfos.Where(i => i.MethodName == info.MethodName).ToList();
+        if (matching.Count > 1) {
+            var invoke = info.DelegateSymbol.DelegateInvokeMethod;
+            var sig    = invoke != null ? GetMethodSignatureIdentifier(invoke) : "Overload";
+            var sameSig = matching.Where(i => {
+                var inv = i.DelegateSymbol.DelegateInvokeMethod;
+                return (inv != null ? GetMethodSignatureIdentifier(inv) : "Overload") == sig;
+            }).ToList();
+
+            if (sameSig.Count > 1) {
+                var idx = sameSig.FindIndex(i => ReferenceEquals(i, info) ||
+                    (i.MethodName == info.MethodName && SymbolEqualityComparer.Default.Equals(i.DelegateSymbol, info.DelegateSymbol)));
+                if (idx < 0)
+                    idx = 0;
+                return $"{info.MethodName}_{sig}_{idx + 1}";
+            }
+
+            return $"{info.MethodName}_{sig}";
+        }
+        return info.MethodName;
+    }
+
+    private static string GetMethodSignatureIdentifier(IMethodSymbol method) {
+        if (method.Parameters.Length == 0)
+            return "NoParams";
+
+        return string.Join("_", method.Parameters.Select(FormatParameterForIdentifier));
+    }
+
+    private static string FormatParameterForIdentifier(IParameterSymbol param) {
+        var prefix = param.RefKind switch {
+            RefKind.Ref => "Ref_",
+            RefKind.Out => "Out_",
+            RefKind.In  => "In_",
+            _           => ""
+        };
+        return $"{prefix}{FormatTypeForIdentifier(param.Type)}";
+    }
+
+    private static string FormatTypeForIdentifier(ITypeSymbol type) {
+        if (type is IArrayTypeSymbol array) {
+            return FormatTypeForIdentifier(array.ElementType) + "Array" + (array.Rank > 1 ? array.Rank.ToString() : "");
+        }
+        if (type is IPointerTypeSymbol pointer) {
+            return FormatTypeForIdentifier(pointer.PointedAtType) + "Ptr";
+        }
+        if (type is INamedTypeSymbol named) {
+            var name = SanitizeIdentifier(named.Name);
+            if (named.IsGenericType && named.TypeArguments.Length > 0) {
+                var args = string.Join("_", named.TypeArguments.Select(FormatTypeForIdentifier));
+                return $"{name}_{args}";
+            }
+            return name;
+        }
+        return SanitizeIdentifier(type.Name);
+    }
+
+    private static string SanitizeIdentifier(string name) {
+        if (string.IsNullOrEmpty(name))
+            return "Type";
+        var sb = new StringBuilder(name.Length);
+        foreach (var c in name) {
+            if (char.IsLetterOrDigit(c) || c == '_')
+                sb.Append(c);
+            else
+                sb.Append('_');
+        }
+        return sb.ToString();
     }
 
     private static void GenerateInterfaceForwardContent(StringBuilder sb, StaticAbstractInfo info, INamedTypeSymbol interfaceSymbol, bool isCSharp11OrGreater) {
@@ -938,6 +1016,17 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
     ) {
         var registrationStatements = new List<string>();
 
+        List<StaticAbstractInfo> GetScopeInfos(StaticAbstractInfo targetInfo, List<StaticAbstractInfo> fallbackInfos) {
+            if (targetInfo.TargetClass != null) {
+                var matches = interfaceInfosMap.Values.SelectMany(v => v)
+                    .Where(i => SymbolEqualityComparer.Default.Equals(i.TargetClass, targetInfo.TargetClass))
+                    .ToList();
+                if (matches.Count > 0)
+                    return matches;
+            }
+            return fallbackInfos;
+        }
+
         foreach (var type in types.Distinct(SymbolEqualityComparer.Default).Cast<INamedTypeSymbol>()) {
             foreach (var iface in type.AllInterfaces) {
                 var infos = GetInterfaceContracts(iface.OriginalDefinition, interfaceInfosMap);
@@ -980,6 +1069,8 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                     if (!matches)
                         continue;
 
+                    var registryName = GetRegistryIdentifier(info, GetScopeInfos(info, infos));
+
                     var registryClassFqn = info.TargetClass != null
                         ? info.TargetClass.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY)
                         : $"{info.InterfaceSymbol.ContainingNamespace
@@ -991,7 +1082,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                         var delegateTypeStr = constructedDelegate.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY);
                         var methodGroupStr  = $"{type.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY)}.{info.MethodName}";
 
-                        registrationStatements.Add($"            {registryClassFqn}.G_Register_{info.MethodName}(typeof({type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), new {delegateTypeStr}({methodGroupStr}));");
+                        registrationStatements.Add($"            {registryClassFqn}.G_Register_{registryName}(typeof({type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), new {delegateTypeStr}({methodGroupStr}));");
                     }
                     else {
                         var openTypeSyntax = GetOpenGenericTypeSyntax(type);
@@ -1027,7 +1118,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                                         }
                             """;
 
-                        registrationStatements.Add($"            {registryClassFqn}.G_RegisterOpen_{info.MethodName}(typeof({openTypeSyntax}), {factoryLambda});");
+                        registrationStatements.Add($"            {registryClassFqn}.G_RegisterOpen_{registryName}(typeof({openTypeSyntax}), {factoryLambda});");
                     }
                 }
             }
@@ -1053,6 +1144,8 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                     if (!CandidateTypeImplementsContract(extType, info, iface))
                         continue;
 
+                    var registryName = GetRegistryIdentifier(info, GetScopeInfos(info, contracts));
+
                     var registryClassFqn = info.TargetClass != null
                         ? info.TargetClass.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY)
                         : $"{info.InterfaceSymbol.ContainingNamespace.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY)}.{info.InterfaceSymbol.Name}";
@@ -1067,17 +1160,17 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
 
                         if (matchingMethod != null) {
                             var methodGroupStr = $"{extType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{info.MethodName}";
-                            registrationStatements.Add($"            {registryClassFqn}.G_Register_{info.MethodName}(typeof({extType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), new {delegateTypeStr}({methodGroupStr}));");
+                            registrationStatements.Add($"            {registryClassFqn}.G_Register_{registryName}(typeof({extType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), new {delegateTypeStr}({methodGroupStr}));");
                         }
                         else {
                             var matchingProp = extType.GetMembers(info.MethodName).OfType<IPropertySymbol>()
                                 .FirstOrDefault(p => p.IsStatic && p.DeclaredAccessibility == Accessibility.Public);
 
                             if (matchingProp != null && delegateInvoke.Parameters.Length == 0) {
-                                registrationStatements.Add($"            {registryClassFqn}.G_Register_{info.MethodName}(typeof({extType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), new {delegateTypeStr}(() => {extType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{info.MethodName}));");
+                                registrationStatements.Add($"            {registryClassFqn}.G_Register_{registryName}(typeof({extType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), new {delegateTypeStr}(() => {extType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{info.MethodName}));");
                             }
                             else if (matchingProp != null && delegateInvoke.Parameters.Length == 1 && delegateInvoke.ReturnsVoid) {
-                                registrationStatements.Add($"            {registryClassFqn}.G_Register_{info.MethodName}(typeof({extType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), new {delegateTypeStr}(val => {extType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{info.MethodName} = val));");
+                                registrationStatements.Add($"            {registryClassFqn}.G_Register_{registryName}(typeof({extType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), new {delegateTypeStr}(val => {extType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{info.MethodName} = val));");
                             }
                         }
                     }
@@ -1116,7 +1209,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                                         }
                             """;
 
-                        registrationStatements.Add($"            {registryClassFqn}.G_RegisterOpen_{info.MethodName}(typeof({openTypeSyntax}), {factoryLambda});");
+                        registrationStatements.Add($"            {registryClassFqn}.G_RegisterOpen_{registryName}(typeof({openTypeSyntax}), {factoryLambda});");
                     }
                 }
             }

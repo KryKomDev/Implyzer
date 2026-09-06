@@ -1061,4 +1061,86 @@ public class StaticAbstractGeneratorTests {
         Assert.DoesNotContain("TestNamespace_IParser_Forward.g.cs", fileNames);
         Assert.Contains("TestNamespace_IParser_Registry.g.cs", fileNames);
     }
+
+    [Fact]
+    public void TestOverloadedMethods_CreatesDistinctRegistriesWithoutConflicts() {
+        const string source =
+            """
+            using System;
+            using Implyzer;
+
+            namespace TestNamespace {
+                public delegate T Parse1<T>(string input);
+                public delegate T Parse2<T>(string input, IFormatProvider provider);
+
+                [StaticAbstract("Parse", typeof(Parse1<object>), "TSelf", "T")]
+                [StaticAbstract("Parse", typeof(Parse2<object>), "TSelf", "T")]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+                public class MyParser : IParser<MyParser> {
+                    public static MyParser Parse(string input) => new();
+                    public static MyParser Parse(string input, IFormatProvider provider) => new();
+                }
+            }
+            """;
+
+        var             compilation = CreateCompilation(source, LanguageVersion.CSharp10, enableVirtualStatics: false);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        var registrySource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("TestNamespace_IParser_Registry.g.cs")).ToString();
+        Assert.Contains("_Parse_StringRegistry", registrySource);
+        Assert.Contains("_Parse_String_IFormatProviderRegistry", registrySource);
+        Assert.Contains("public static void G_Register_Parse_String(", registrySource);
+        Assert.Contains("public static void G_Register_Parse_String_IFormatProvider(", registrySource);
+
+        var moduleInitializerSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("StaticAbstractRegistry.g.cs")).ToString();
+        Assert.Contains("global::TestNamespace.IParser.G_Register_Parse_String(typeof(global::TestNamespace.MyParser)", moduleInitializerSource);
+        Assert.Contains("global::TestNamespace.IParser.G_Register_Parse_String_IFormatProvider(typeof(global::TestNamespace.MyParser)", moduleInitializerSource);
+    }
+
+    [Fact]
+    public void TestOverloadedMethods_WithTargetClass_CreatesDistinctRegistries() {
+        const string source =
+            """
+            using System;
+            using Implyzer;
+
+            namespace TestNamespace {
+                public delegate T Parse1<T>(string input);
+                public delegate T Parse2<T>(string input, int radix);
+
+                [StaticAbstract("Parse", typeof(Parse1<object>), typeof(ParserRegistry), "TSelf", "T")]
+                [StaticAbstract("Parse", typeof(Parse2<object>), typeof(ParserRegistry), "TSelf", "T")]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+                public partial class ParserRegistry {}
+
+                public class MyParser : IParser<MyParser> {
+                    public static MyParser Parse(string input) => new();
+                    public static MyParser Parse(string input, int radix) => new();
+                }
+            }
+            """;
+
+        var             compilation = CreateCompilation(source, LanguageVersion.CSharp10, enableVirtualStatics: false);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        var registrySource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("TestNamespace_ParserRegistry_Registry.g.cs")).ToString();
+        Assert.Contains("_Parse_StringRegistry", registrySource);
+        Assert.Contains("_Parse_String_Int32Registry", registrySource);
+        Assert.Contains("G_Register_Parse_String", registrySource);
+        Assert.Contains("G_Register_Parse_String_Int32", registrySource);
+
+        var moduleInitializerSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("StaticAbstractRegistry.g.cs")).ToString();
+        Assert.Contains("global::TestNamespace.ParserRegistry.G_Register_Parse_String(typeof(global::TestNamespace.MyParser)", moduleInitializerSource);
+        Assert.Contains("global::TestNamespace.ParserRegistry.G_Register_Parse_String_Int32(typeof(global::TestNamespace.MyParser)", moduleInitializerSource);
+    }
 }
