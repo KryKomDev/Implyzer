@@ -391,14 +391,14 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
         INamedTypeSymbol? contextInterface
     ) {
         var               strict                      = true;
-        INamedTypeSymbol? targetInterface             = contextInterface;
+        INamedTypeSymbol? targetInterface             = contextInterface?.OriginalDefinition;
         var               targetInterfaceIsPositional = false;
 
         foreach (var na in attribute.NamedArguments) {
             if (na is { Key: "Strict", Value.Value: bool b })
                 strict = b;
             else if (na is { Key: "TargetInterface", Value.Value: INamedTypeSymbol iface })
-                targetInterface = iface;
+                targetInterface = iface.OriginalDefinition;
         }
 
         var types = new List<ITypeSymbol>();
@@ -419,12 +419,12 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
 
         // If on assembly and TargetInterface was not specified via property, but first type is an interface
         if (contextInterface == null && targetInterface == null && types.Count > 0 && types[0].TypeKind == TypeKind.Interface) {
-            targetInterface = types[0] as INamedTypeSymbol;
+            targetInterface = (types[0] as INamedTypeSymbol)?.OriginalDefinition;
             types.RemoveAt(0);
             targetInterfaceIsPositional = true;
         }
 
-        return (targetInterface, types, strict, targetInterfaceIsPositional);
+        return (targetInterface?.OriginalDefinition, types, strict, targetInterfaceIsPositional);
     }
 
     private static List<StaticAbstractInfo> GetInterfaceContracts(INamedTypeSymbol interfaceSymbol) {
