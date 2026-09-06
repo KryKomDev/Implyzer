@@ -20,6 +20,7 @@ public class AttributesGenerator : IIncrementalGenerator {
                 CheckAndRegisterResource(productionContext, compilation, "StaticAbstractAttribute", "Implyzer.StaticAbstractAttribute");
                 CheckAndRegisterResource(productionContext, compilation, "StaticVirtualAttribute",  "Implyzer.StaticVirtualAttribute");
                 CheckAndRegisterResource(productionContext, compilation, "StaticDefaultAttribute",  "Implyzer.StaticDefaultAttribute");
+                CheckAndRegisterResource(productionContext, compilation, "StaticRegisterAttribute", "Implyzer.StaticRegisterAttribute");
             }
         );
     }

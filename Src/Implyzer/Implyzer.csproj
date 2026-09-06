@@ -49,6 +49,7 @@
         <EmbeddedResource Include="Templates\StaticAbstractAttribute.cs"/>
         <EmbeddedResource Include="Templates\StaticVirtualAttribute.cs"/>
         <EmbeddedResource Include="Templates\StaticDefaultAttribute.cs"/>
+        <EmbeddedResource Include="Templates\StaticRegisterAttribute.cs"/>
     </ItemGroup>
 
     <ItemGroup>

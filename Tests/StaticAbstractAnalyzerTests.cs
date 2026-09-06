@@ -94,6 +94,17 @@ public class StaticAbstractAnalyzerTests {
                       MethodName = methodName;
                   }
               }
+
+              [AttributeUsage(AttributeTargets.Interface | AttributeTargets.Assembly, AllowMultiple = true, Inherited = false)]
+              public sealed class StaticRegisterAttribute : Attribute {
+                  public Type[] Types { get; }
+                  public Type? TargetInterface { get; set; }
+                  public bool Strict { get; set; } = true;
+
+                  public StaticRegisterAttribute(params Type[] types) {
+                      Types = types ?? Type.EmptyTypes;
+                  }
+              }
           }
 
           namespace TestNamespace
@@ -585,5 +596,111 @@ public class StaticAbstractAnalyzerTests {
             .WithArguments("Box", "TryParse", "TryParse<Box<T>>", "IParser<Box<T>>");
 
         await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
+
+    [Fact]
+    public async Task TestStaticRegister_ConformingType_NoDiagnostic() {
+        var test =
+            """
+            public delegate bool TryParse<T>(string input, out T result);
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+            [StaticRegister(typeof(int), typeof(double))]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+            """;
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test));
+    }
+
+    [Fact]
+    public async Task TestStaticRegister_MissingMethod_ReportsIMPL014() {
+        var test =
+            """
+            public delegate bool TryParse<T>(string input, out T result);
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+            [StaticRegister({|#0:typeof(string)|})]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+            """;
+
+        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticRegisterTypeMissingMember.Id)
+            .WithLocation(0)
+            .WithArguments("string", "IParser<TSelf>", "TryParse", "TryParse<string>");
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
+
+    [Fact]
+    public async Task TestStaticRegister_NonStrict_DoesNotReportIMPL014() {
+        var test =
+            """
+            public delegate bool TryParse<T>(string input, out T result);
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+            [StaticRegister(typeof(string), Strict = false)]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+            """;
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test));
+    }
+
+    [Fact]
+    public async Task TestStaticRegister_InterfaceNotStaticAbstract_ReportsIMPL015() {
+        var test =
+            """
+            [{|#0:StaticRegister(typeof(int))|}]
+            public interface INoMembers {}
+            """;
+
+        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticRegisterInterfaceNotStaticAbstract.Id)
+            .WithLocation(0)
+            .WithArguments("INoMembers");
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
+
+    [Fact]
+    public async Task TestStaticRegister_AlreadyImplements_ReportsIMPL016() {
+        var test =
+            """
+            public delegate bool TryParse<T>(string input, out T result);
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+            [StaticRegister({|#0:typeof(Color)|})]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+            public class Color : IParser<Color> {
+                public static bool TryParse(string input, out Color result) {
+                    result = new Color();
+                    return true;
+                }
+            }
+            """;
+
+        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticRegisterTypeAlreadyImplementsInterface.Id)
+            .WithLocation(0)
+            .WithArguments("Color", "IParser<TSelf>");
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
+
+    [Fact]
+    public async Task TestStaticRegister_WithDefaultImplementation_OptionalMember() {
+        var test =
+            """
+            public delegate bool TryParse<T>(string input, out T result);
+            public delegate T Parse<T>(string input);
+
+            public static class ParserDefaults {
+                public static T Parse<T>(string input) => default!;
+            }
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+            [StaticVirtual("Parse", typeof(Parse<object>), "TSelf", "T", DefaultType = typeof(ParserDefaults))]
+            [StaticRegister(typeof(int))]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+            """;
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test));
     }
 }

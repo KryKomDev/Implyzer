@@ -156,32 +156,88 @@ var success = IParser.TryParse(typeof(Color), "red", out var colorObj);
 
 ---
 
-## 4 Behind the Scenes
+## 4 Registering External & BCL Types (`[StaticRegister]`)
+
+In C#, you cannot retroactively declare that an existing type (such as `int`, `Guid`, or a third-party library class) implements your interface. Implyzer solves this via **structural duck typing** using the `[StaticRegister]` attribute.
+
+If a candidate type has public static methods or properties matching the signatures of all required static members of an interface, you can register it directly to the interface's static registry.
+
+### 4.1 Interface-Level Registration
+
+Decorate the interface directly with the types you want to register:
+
+```csharp
+[StaticAbstract("TryParse", typeof(TryParse<>), "TSelf", "T")]
+[StaticVirtual("Parse", typeof(Parse<>), "TSelf", "T", DefaultType = typeof(ParserDefaults))]
+[StaticRegister(typeof(int), typeof(Guid))]
+public partial interface IParser<TSelf> where TSelf : IParser<TSelf>;
+```
+
+### 4.2 Assembly-Level Registration
+
+For modular architectures or external interfaces, apply `[StaticRegister]` at the assembly level:
+
+```csharp
+// Using named TargetInterface property:
+[assembly: StaticRegister(typeof(int), typeof(Guid), TargetInterface = typeof(IParser<>))]
+
+// Or using positional syntax (target interface as first argument):
+[assembly: StaticRegister(typeof(IParser<>), typeof(int), typeof(Guid))]
+```
+
+### 4.3 Relaxed Companion Constraints & Calling Registered Types
+
+When external types are registered on an interface, Implyzer automatically relaxes the `where T : IParser<T>` constraint on the companion helper methods. This allows you to call companion methods with external types directly:
+
+```csharp
+// Generic invocation with BCL type (zero cast overhead):
+bool success = IParser.TryParse<int>("42", out int intVal);
+
+// Non-generic invocation with BCL type:
+bool guidOk = IParser.TryParse(typeof(Guid), "d3b07384-d113-4f01-9b16-92c25df60e22", out object? guidObj);
+```
+
+### 4.4 Open Generic External Types
+
+You can also register external open generic types, such as `[StaticRegister(typeof(Wrapper<>))]`. Implyzer dynamically constructs and caches delegates for closed variants (e.g. `Wrapper<int>`) when requested at runtime.
+
+### 4.5 Strictness Control
+
+By default, `Strict = true` reports compile-time analyzer error `IMPL014` if any registered type does not satisfy the contract. Setting `Strict = false` ignores non-conforming types instead of reporting a compile-time error:
+
+```csharp
+[StaticRegister(typeof(int), typeof(string), Strict = false)]
+public partial interface IParser<TSelf> where TSelf : IParser<TSelf>;
+```
+
+---
+
+## 5 Behind the Scenes
 
 Implyzer automatically adapts its code generation based on the compiler's language version and target framework runtime capabilities.
 
-### 4.1 Native C# 11+ Execution (.NET 7+)
+### 5.1 Native C# 11+ Execution (.NET 7+)
 
 When compiling with C# 11+ on a runtime supporting virtual statics in interfaces:
 - **Interface Declarations**: Implyzer generates native `public static abstract` member declarations directly inside the partial interface. When a default implementation is present, it generates `public static virtual` members with method bodies that forward directly to the default implementation.
-- **Generic Invocations**: Generic helper calls like `IParser.TryParse<T>(...)` invoke `T.TryParse(...)` directly with **zero dictionary lookup or delegate allocation overhead**. If `T` omits the method, the CLR dispatches to the virtual static default method on the interface.
+- **Generic Invocations**: Generic helper calls like `IParser.TryParse<T>(...)` invoke `T.TryParse(...)` directly with **zero dictionary lookup or delegate allocation overhead**. If `T` omits the method, the CLR dispatches to the virtual static default method on the interface. When external types are registered, the companion class provides fast dictionary delegate lookup for registered external types with automatic reflection fallback.
 - **Non-Generic Invocations**: Overloads accepting a `System.Type` parameter use reflection (`type.GetMethods(...)`) to locate and invoke the static method dynamically at runtime.
 
-### 4.2 Legacy Target Simulation (C# < 11 / .NET Standard 2.0)
+### 5.2 Legacy Target Simulation (C# < 11 / .NET Standard 2.0)
 
 When targeting older frameworks where native `static abstract` interface members are unavailable:
-- **Implementation Registration**: Implyzer discovers implementing types at compile-time and generates a `[ModuleInitializer]` method to register implementations into a static registry (`Dictionary<Type, Delegate>`) upon assembly loading.
-- **Open Generic Support**: Open generic types (e.g., `Box<T> : IParser<Box<T>>` or `Pair<T1, T2> : IParser<Pair<T1, T2>>`) are registered via an open generic factory registry. When a closed generic type like `Box<int>` or `Box<string>` is invoked for the first time, Implyzer dynamically constructs and caches the closed delegate, providing full simulator compatibility for open generics with subsequent O(1) fast-path lookups.
+- **Implementation Registration**: Implyzer discovers implementing types at compile-time and generates a `[ModuleInitializer]` method to register implementations into a static registry (`Dictionary<Type, Delegate>`) upon assembly loading. External types registered via `[StaticRegister]` are registered in the same initializer.
+- **Open Generic Support**: Open generic types (e.g., `Box<T> : IParser<Box<T>>` or external `Wrapper<T>`) are registered via an open generic factory registry. When a closed generic type like `Box<int>` or `Wrapper<string>` is invoked for the first time, Implyzer dynamically constructs and caches the closed delegate, providing full simulator compatibility for open generics with subsequent O(1) fast-path lookups.
 - **Dynamic Overload Routing**: Generic overloads retrieve delegates from the registry, and non-generic overloads utilize `DynamicInvoke` to execute static methods at runtime.
 
-### 4.3 Default Implementation Dispatch
+### 5.3 Default Implementation Dispatch
 
 - **C# 11+**: Emitted as `public static virtual` interface members with zero-overhead runtime dispatch.
 - **C# < 11**: If an implementing type did not register a custom implementation, companion routing helpers fall back to calling the default implementation directly (in generic overloads) or via reflection fallback (in non-generic overloads).
 
 ---
 
-## 5 Diagnostics
+## 6 Diagnostics
 
 Implyzer's static abstract analyzer reports compile-time errors to ensure type safety:
 
@@ -194,3 +250,6 @@ Implyzer's static abstract analyzer reports compile-time errors to ensure type s
 | `IMPL011` | Default Method Not Found | The default implementation method specified was not found on the target type. |
 | `IMPL012` | Default Method Signature Mismatch | The default implementation method parameters or return type do not match the static abstract delegate signature. |
 | `IMPL013` | Default Method Must Be Static | The default implementation method must be declared as `static`. |
+| `IMPL014` | Static Register Missing Member | A type registered via `[StaticRegister]` does not implement a required static abstract or virtual member. |
+| `IMPL015` | Static Register Non-Static-Abstract Interface | Target interface specified in `[StaticRegister]` has no `[StaticAbstract]` or `[StaticVirtual]` attributes. |
+| `IMPL016` | Static Register Redundant Registration | A type registered via `[StaticRegister]` already explicitly implements the target interface. |
