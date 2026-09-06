@@ -1002,4 +1002,63 @@ public class StaticAbstractGeneratorTests {
         Assert.Contains("global::TestNamespace.IParser.G_RegisterOpen_TryParse(typeof(global::TestNamespace.Wrapper<>)", moduleInitializerSource);
         Assert.Contains("typeof(global::TestNamespace.TryParse<>).MakeGenericType(closedType)", moduleInitializerSource);
     }
+
+    [Fact]
+    public void TestStaticRegister_AssemblyTargetOpenGeneric_CodeGeneration() {
+        const string source =
+            """
+            using System;
+            using Implyzer;
+
+            [assembly: StaticRegister(typeof(int), TargetInterface = typeof(TestNamespace.IParser<>))]
+
+            namespace TestNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+
+                [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+            }
+            """;
+
+        var             compilation = CreateCompilation(source, LanguageVersion.CSharp11, enableVirtualStatics: true);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        var registrySource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("TestNamespace_IParser_Registry.g.cs")).ToString();
+        Assert.Contains("G_Register_TryParse", registrySource);
+        Assert.DoesNotContain("where T : global::TestNamespace.IParser<T>", registrySource);
+
+        var moduleInitializerSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("StaticAbstractRegistry.g.cs")).ToString();
+        Assert.Contains("global::TestNamespace.IParser.G_Register_TryParse(typeof(int)", moduleInitializerSource);
+    }
+
+    [Fact]
+    public void TestInterfaceForward_SkippedWithoutDIMSupport() {
+        const string source =
+            """
+            using System;
+            using Implyzer;
+
+            namespace TestNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+
+                [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+            }
+            """;
+
+        var             compilation = CreateCompilation(source, LanguageVersion.CSharp7_3, enableVirtualStatics: false);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        var fileNames = runResult.GeneratedTrees.Select(t => Path.GetFileName(t.FilePath)).ToList();
+        Assert.DoesNotContain("TestNamespace_IParser_Forward.g.cs", fileNames);
+        Assert.Contains("TestNamespace_IParser_Registry.g.cs", fileNames);
+    }
 }
