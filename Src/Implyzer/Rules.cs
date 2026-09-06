@@ -134,6 +134,42 @@ internal static class Rules {
         "The default implementation method specified in [StaticAbstract] or [StaticVirtual] must be static."
     );
 
+    internal static readonly DiagnosticDescriptor StaticRegisterTypeMissingMember = new(
+        "IMPL014",
+        "Registered type missing required static member",
+        "Type '{0}' cannot be registered for interface '{1}' because it does not implement static member '{2}' matching signature '{3}'",
+        "Implementation",
+        DiagnosticSeverity.Error,
+        true,
+        "Types registered with [StaticRegister] must implement all required static abstract members that do not have default implementations.",
+        null,
+        "CompilationEnd"
+    );
+
+    internal static readonly DiagnosticDescriptor StaticRegisterInterfaceNotStaticAbstract = new(
+        "IMPL015",
+        "StaticRegister on non-static-abstract interface",
+        "Interface '{0}' has [StaticRegister] applied but defines no static abstract or virtual members",
+        "Design",
+        DiagnosticSeverity.Warning,
+        true,
+        "Interfaces with [StaticRegister] must define at least one static abstract or virtual member.",
+        null,
+        "CompilationEnd"
+    );
+
+    internal static readonly DiagnosticDescriptor StaticRegisterTypeAlreadyImplementsInterface = new(
+        "IMPL016",
+        "Redundant static registration",
+        "Type '{0}' already implements interface '{1}'; explicit registration via [StaticRegister] is redundant",
+        "Design",
+        DiagnosticSeverity.Info,
+        true,
+        "Types that directly implement the interface do not need to be registered via [StaticRegister].",
+        null,
+        "CompilationEnd"
+    );
+
     internal static ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => [
         RefVal,
         Type,
@@ -147,6 +183,9 @@ internal static class Rules {
         StaticAbstractSignatureNotDelegate,
         StaticAbstractDefaultMethodNotFound,
         StaticAbstractDefaultMethodSignatureMismatch,
-        StaticAbstractDefaultMethodMustBeStatic
+        StaticAbstractDefaultMethodMustBeStatic,
+        StaticRegisterTypeMissingMember,
+        StaticRegisterInterfaceNotStaticAbstract,
+        StaticRegisterTypeAlreadyImplementsInterface
     ];
 }

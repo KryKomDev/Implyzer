@@ -252,4 +252,4 @@ You can find the full documentation [here](https://krykomdev.github.io/Implyzer/
 
 ## License
 
-MIT
+MPL-2.0

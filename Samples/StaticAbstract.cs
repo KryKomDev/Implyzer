@@ -18,7 +18,7 @@ public delegate T Parse<T>([NotNullWhen(true)] string? input);
 /// Defaults for ICustomParsable static virtual members.
 /// </summary>
 public static class CustomParsableDefaults {
-    public static T Parse<T>([NotNullWhen(true)] string? input) where T : ICustomParsable<T> {
+    public static T Parse<T>([NotNullWhen(true)] string? input) {
         if (ICustomParsable.TryParse<T>(input, out var result)) {
             return result;
         }
@@ -28,12 +28,14 @@ public static class CustomParsableDefaults {
 }
 
 /// <summary>
-/// Illustrates [StaticAbstract] and [StaticVirtual].
+/// Illustrates [StaticAbstract], [StaticVirtual], and [StaticRegister].
 /// In C# 11+, emits native static abstract/virtual interface members with default implementations.
 /// In C# &lt; 11, generates static companion helper class to route static calls to implementations with fallback.
+/// [StaticRegister] allows duck typing for external/BCL types that match method/property signatures.
 /// </summary>
 [StaticAbstract("TryParse", typeof(TryParse<>), "TSelf", "T")]
 [StaticVirtual("Parse", typeof(Parse<>), "TSelf", "T", DefaultType = typeof(CustomParsableDefaults))]
+[StaticRegister(typeof(int), typeof(Guid))]
 public partial interface ICustomParsable<TSelf> where TSelf : ICustomParsable<TSelf>;
 
 // VALID: True implements ICustomParsable<True> and provides TryParse.
@@ -147,5 +149,20 @@ public class Program {
 
         var boxNonGenericSuccess = ICustomParsable.TryParse(typeof(Box<string>), "box", out var boxStringResult);
         Console.WriteLine($"Open generic non-generic TryParse ('box' -> Box<string>): {boxNonGenericSuccess}, Result: {boxStringResult}");
+
+
+        // === Option 5: External BCL type registration via [StaticRegister] (Duck Typing) ===
+
+        // Generic call for int (System.Int32):
+        var intSuccess = ICustomParsable.TryParse<int>("42", out var intResult);
+        Console.WriteLine($"Registered BCL TryParse ('42' -> int): {intSuccess}, Result: {intResult}");
+
+        var intParsed = ICustomParsable.Parse<int>("420");
+        Console.WriteLine($"Registered BCL Parse ('420' -> int): {intParsed}");
+
+        // Non-generic call for Guid (System.Guid):
+        var sampleGuidStr = "d3b07384-d113-4f01-9b16-92c25df60e22";
+        var guidSuccess = ICustomParsable.TryParse(typeof(Guid), sampleGuidStr, out var guidObjResult);
+        Console.WriteLine($"Registered BCL non-generic TryParse ('{sampleGuidStr}' -> Guid): {guidSuccess}, Result: {guidObjResult}");
     }
 }

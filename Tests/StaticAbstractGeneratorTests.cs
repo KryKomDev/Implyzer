@@ -72,6 +72,16 @@ public class StaticAbstractGeneratorTests {
                         MethodName = methodName;
                     }
                 }
+
+                [AttributeUsage(AttributeTargets.Interface | AttributeTargets.Assembly, AllowMultiple = true, Inherited = false)]
+                public sealed class StaticRegisterAttribute : Attribute {
+                    public Type[] Types { get; }
+                    public Type? TargetInterface { get; set; }
+                    public bool Strict { get; set; } = true;
+                    public StaticRegisterAttribute(params Type[] types) {
+                        Types = types ?? Type.EmptyTypes;
+                    }
+                }
             }
             """;
 
@@ -745,5 +755,251 @@ public class StaticAbstractGeneratorTests {
         var unregArgs = new object?[] { typeof(int), "test", null };
         var targetEx = Assert.Throws<System.Reflection.TargetInvocationException>(() => nonGenericMethod.Invoke(null, unregArgs));
         Assert.IsType<InvalidOperationException>(targetEx.InnerException);
+    }
+
+    [Fact]
+    public void TestStaticRegister_InterfaceLevel_CodeGeneration() {
+        const string source =
+            """
+            using System;
+            using Implyzer;
+
+            namespace TestNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+
+                [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                [StaticRegister(typeof(int), typeof(Guid))]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+            }
+            """;
+
+        var             compilation = CreateCompilation(source);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        Assert.Equal(3, runResult.GeneratedTrees.Length);
+
+        var companionSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("TestNamespace_IParser_Registry.g.cs")).ToString();
+        Assert.Contains("public static bool TryParse<T>(string input, out T result)", companionSource);
+        Assert.DoesNotContain("where T : global::TestNamespace.IParser<T>", companionSource);
+
+        var moduleInitializerSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("StaticAbstractRegistry.g.cs")).ToString();
+        Assert.Contains("global::TestNamespace.IParser.G_Register_TryParse(typeof(int), new global::TestNamespace.TryParse<int>(int.TryParse));", moduleInitializerSource);
+        Assert.Contains("global::TestNamespace.IParser.G_Register_TryParse(typeof(global::System.Guid), new global::TestNamespace.TryParse<global::System.Guid>(global::System.Guid.TryParse));", moduleInitializerSource);
+    }
+
+    [Fact]
+    public void TestStaticRegister_AssemblyLevel_CodeGeneration() {
+        const string source =
+            """
+            using System;
+            using Implyzer;
+
+            [assembly: StaticRegister(typeof(int), TargetInterface = typeof(TestNamespace.IParser<>))]
+
+            namespace TestNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+
+                [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+            }
+            """;
+
+        var             compilation = CreateCompilation(source);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        Assert.Equal(3, runResult.GeneratedTrees.Length);
+
+        var companionSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("TestNamespace_IParser_Registry.g.cs")).ToString();
+        Assert.Contains("public static bool TryParse<T>(string input, out T result)", companionSource);
+        Assert.DoesNotContain("where T : global::TestNamespace.IParser<T>", companionSource);
+
+        var moduleInitializerSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("StaticAbstractRegistry.g.cs")).ToString();
+        Assert.Contains("global::TestNamespace.IParser.G_Register_TryParse(typeof(int), new global::TestNamespace.TryParse<int>(int.TryParse));", moduleInitializerSource);
+    }
+
+    [Fact]
+    public void TestStaticRegister_Execution_CSharp10() {
+        const string source =
+            """
+            using System;
+            using Implyzer;
+
+            namespace TestNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+
+                [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                [StaticRegister(typeof(int))]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+                public class CustomNumber : IParser<CustomNumber> {
+                    public int Value { get; set; }
+                    public static bool TryParse(string input, out CustomNumber result) {
+                        result = new CustomNumber { Value = 999 };
+                        return true;
+                    }
+                }
+            }
+            """;
+
+        var             compilation = CreateCompilation(source, LanguageVersion.CSharp10);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp10);
+        var parsedGeneratedTrees = runResult.GeneratedTrees.Select(t => CSharpSyntaxTree.ParseText(t.ToString(), parseOptions));
+        var compilationWithGenerated = compilation.AddSyntaxTrees(parsedGeneratedTrees);
+
+        using var ms         = new MemoryStream();
+        var       emitResult = compilationWithGenerated.Emit(ms);
+        Assert.True(emitResult.Success, string.Join("\n", emitResult.Diagnostics.Select(d => d.ToString())));
+
+        ms.Seek(0, SeekOrigin.Begin);
+        var assembly = System.Reflection.Assembly.Load(ms.ToArray());
+
+        var registryType = assembly.GetType("Implyzer.StaticAbstractRegistry");
+        Assert.NotNull(registryType);
+        var initMethod = registryType.GetMethod("Initialize");
+        Assert.NotNull(initMethod);
+        initMethod.Invoke(null, null);
+
+        var parserType = assembly.GetType("TestNamespace.IParser");
+        Assert.NotNull(parserType);
+
+        // 1. Test generic call for CustomNumber (implements IParser)
+        var customNumType = assembly.GetType("TestNamespace.CustomNumber");
+        Assert.NotNull(customNumType);
+        var genericMethodDef = parserType.GetMethods().First(m => m.Name == "TryParse" && m.IsGenericMethod);
+        var genericCustomMethod = genericMethodDef.MakeGenericMethod(customNumType);
+        var customArgs = new object?[] { "ignored", null };
+        var customSuccess = (bool)genericCustomMethod.Invoke(null, customArgs)!;
+        Assert.True(customSuccess);
+        Assert.NotNull(customArgs[1]);
+
+        // 2. Test generic call for int (registered external BCL type)
+        var genericIntMethod = genericMethodDef.MakeGenericMethod(typeof(int));
+        var intArgs = new object?[] { "42", 0 };
+        var intSuccess = (bool)genericIntMethod.Invoke(null, intArgs)!;
+        Assert.True(intSuccess);
+        Assert.Equal(42, intArgs[1]);
+
+        // 3. Test non-generic call for int
+        var nonGenericMethod = parserType.GetMethod("TryParse", [typeof(Type), typeof(string), typeof(object).MakeByRefType()]);
+        Assert.NotNull(nonGenericMethod);
+        var nonGenericArgs = new object?[] { typeof(int), "12345", null };
+        var nonGenericSuccess = (bool)nonGenericMethod.Invoke(null, nonGenericArgs)!;
+        Assert.True(nonGenericSuccess);
+        Assert.Equal(12345, nonGenericArgs[2]);
+
+        // 4. Test unregistered type throws
+        var unregArgs = new object?[] { typeof(double), "3.14", null };
+        var ex = Assert.Throws<System.Reflection.TargetInvocationException>(() => nonGenericMethod.Invoke(null, unregArgs));
+        Assert.IsType<InvalidOperationException>(ex.InnerException);
+    }
+
+    [Fact]
+    public void TestStaticRegister_Execution_CSharp11() {
+        const string source =
+            """
+            #nullable enable
+            #pragma warning disable
+            using System;
+            using Implyzer;
+
+            namespace TestNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+
+                [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                [StaticRegister(typeof(int))]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+                public class CustomNumber : IParser<CustomNumber> {
+                    public static bool TryParse(string input, out CustomNumber result) {
+                        result = new CustomNumber();
+                        return true;
+                    }
+                }
+            }
+            """;
+
+        var             compilation = CreateCompilation(source, LanguageVersion.CSharp11, enableVirtualStatics: true);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp11);
+        var parsedGeneratedTrees = runResult.GeneratedTrees.Select(t => CSharpSyntaxTree.ParseText(t.ToString(), parseOptions));
+        var compilationWithGenerated = compilation.AddSyntaxTrees(parsedGeneratedTrees);
+
+        using var ms         = new MemoryStream();
+        var       emitResult = compilationWithGenerated.Emit(ms);
+        Assert.True(emitResult.Success, string.Join("\n", emitResult.Diagnostics.Select(d => d.ToString())));
+
+        ms.Seek(0, SeekOrigin.Begin);
+        var assembly = System.Reflection.Assembly.Load(ms.ToArray());
+
+        var registryType = assembly.GetType("Implyzer.StaticAbstractRegistry");
+        Assert.NotNull(registryType);
+        var initMethod = registryType.GetMethod("Initialize");
+        Assert.NotNull(initMethod);
+        initMethod.Invoke(null, null);
+
+        var parserType = assembly.GetType("TestNamespace.IParser");
+        Assert.NotNull(parserType);
+
+        // Test generic call for int in C# 11 mode
+        var genericMethodDef = parserType.GetMethods().First(m => m.Name == "TryParse" && m.IsGenericMethod);
+        var genericIntMethod = genericMethodDef.MakeGenericMethod(typeof(int));
+        var intArgs = new object?[] { "888", 0 };
+        var intSuccess = (bool)genericIntMethod.Invoke(null, intArgs)!;
+        Assert.True(intSuccess);
+        Assert.Equal(888, intArgs[1]);
+    }
+
+    [Fact]
+    public void TestStaticRegister_OpenGeneric_CodeGeneration() {
+        const string source =
+            """
+            using System;
+            using Implyzer;
+
+            namespace TestNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+
+                [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                [StaticRegister(typeof(Wrapper<>))]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+                public class Wrapper<T> {
+                    public static bool TryParse(string input, out Wrapper<T> result) {
+                        result = new Wrapper<T>();
+                        return true;
+                    }
+                }
+            }
+            """;
+
+        var             compilation = CreateCompilation(source);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        var moduleInitializerSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("StaticAbstractRegistry.g.cs")).ToString();
+        Assert.Contains("global::TestNamespace.IParser.G_RegisterOpen_TryParse(typeof(global::TestNamespace.Wrapper<>)", moduleInitializerSource);
+        Assert.Contains("typeof(global::TestNamespace.TryParse<>).MakeGenericType(closedType)", moduleInitializerSource);
     }
 }
