@@ -170,6 +170,26 @@ internal static class Rules {
         "CompilationEnd"
     );
 
+    internal static readonly DiagnosticDescriptor StaticVirtualTargetTypeNotPartial = new(
+        "IMPL017",
+        "Target type must be partial",
+        "Type '{0}' must be partial because interface '{1}' has static virtual method '{2}' configured to be implemented in target types",
+        "Design",
+        DiagnosticSeverity.Error,
+        true,
+        "Types implementing interfaces with static virtual methods configured to be implemented in target types must be partial."
+    );
+
+    internal static readonly DiagnosticDescriptor StaticVirtualMethodNotImplemented = new(
+        "IMPL018",
+        "Static virtual method not implemented in target type",
+        "Type '{0}' does not implement static virtual member '{1}' from interface '{2}'",
+        "Design",
+        DiagnosticSeverity.Hidden,
+        true,
+        "Static virtual methods have default implementations, but target types can explicitly implement them."
+    );
+
     internal static ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => [
         RefVal,
         Type,
@@ -186,6 +206,8 @@ internal static class Rules {
         StaticAbstractDefaultMethodMustBeStatic,
         StaticRegisterTypeMissingMember,
         StaticRegisterInterfaceNotStaticAbstract,
-        StaticRegisterTypeAlreadyImplementsInterface
+        StaticRegisterTypeAlreadyImplementsInterface,
+        StaticVirtualTargetTypeNotPartial,
+        StaticVirtualMethodNotImplemented
     ];
 }

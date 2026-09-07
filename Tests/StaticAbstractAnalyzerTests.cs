@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Testing;
 using Microsoft.CodeAnalysis.Testing;
 using Xunit;
@@ -12,6 +13,33 @@ public static class VerifyStaticAbstract {
         var test = new CSharpAnalyzerTest<StaticAbstractAnalyzer, DefaultVerifier> {
             TestCode = source
         };
+
+        test.SolutionTransforms.Add(
+            (solution, projectId) => {
+                var project = solution.GetProject(projectId);
+
+                if (project == null)
+                    return solution;
+
+                var parseOptions = project.ParseOptions as Microsoft.CodeAnalysis.CSharp.CSharpParseOptions;
+
+                if (parseOptions == null)
+                    return solution;
+
+                return solution.WithProjectParseOptions(projectId, parseOptions.WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest));
+            }
+        );
+
+        test.ExpectedDiagnostics.AddRange(expected);
+        await test.RunAsync();
+    }
+
+    public static async Task VerifyAnalyzerWithSourcesAsync((string filename, string content)[] sources, params DiagnosticResult[] expected) {
+        var test = new CSharpAnalyzerTest<StaticAbstractAnalyzer, DefaultVerifier>();
+
+        foreach (var (filename, content) in sources) {
+            test.TestState.Sources.Add((filename, content));
+        }
 
         test.SolutionTransforms.Add(
             (solution, projectId) => {
@@ -50,6 +78,7 @@ public class StaticAbstractAnalyzerTests {
                   public Type? TargetClass { get; }
                   public Type? DefaultType { get; set; }
                   public string? DefaultMethod { get; set; }
+                  public bool ImplementInTargetTypes { get; set; }
 
                   public StaticAbstractAttribute(string methodName, Type signature, params string[] typeParams) {
                       MethodName = methodName;
@@ -104,6 +133,12 @@ public class StaticAbstractAnalyzerTests {
                   public StaticRegisterAttribute(params Type[] types) {
                       Types = types ?? Type.EmptyTypes;
                   }
+              }
+
+              [AttributeUsage(AttributeTargets.Interface | AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Assembly, Inherited = false, AllowMultiple = false)]
+              public sealed class ImplementInTargetTypesAttribute : Attribute {
+                  public bool Enabled { get; }
+                  public ImplementInTargetTypesAttribute(bool enabled = true) { Enabled = enabled; }
               }
           }
 
@@ -404,7 +439,7 @@ public class StaticAbstractAnalyzerTests {
             [StaticAbstract("Parse", typeof(Parse<object>), new[] { "TSelf", "T" }, DefaultType = typeof(ParserDefaults))]
             public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
 
-            public class Color : IParser<Color> {
+            public class {|#0:Color|} : IParser<Color> {
                 public static bool TryParse(string input, out Color result) {
                     result = new Color();
                     return true;
@@ -413,7 +448,12 @@ public class StaticAbstractAnalyzerTests {
             }
             """;
 
-        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test));
+        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticVirtualMethodNotImplemented.Id)
+            .WithLocation(0)
+            .WithArguments("Color", "Parse", "IParser")
+            .WithSeverity(DiagnosticSeverity.Hidden);
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
 
     [Fact]
@@ -459,7 +499,7 @@ public class StaticAbstractAnalyzerTests {
             [StaticVirtual("Parse", typeof(Parse<object>), new[] { "TSelf", "T" }, DefaultType = typeof(ParserDefaults))]
             public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
 
-            public class Color : IParser<Color> {
+            public class {|#0:Color|} : IParser<Color> {
                 public static bool TryParse(string input, out Color result) {
                     result = new Color();
                     return true;
@@ -467,7 +507,12 @@ public class StaticAbstractAnalyzerTests {
             }
             """;
 
-        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test));
+        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticVirtualMethodNotImplemented.Id)
+            .WithLocation(0)
+            .WithArguments("Color", "Parse", "IParser")
+            .WithSeverity(DiagnosticSeverity.Hidden);
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
 
     [Fact]
@@ -486,7 +531,7 @@ public class StaticAbstractAnalyzerTests {
             [StaticVirtual("Parse", typeof(Parse<object>), new[] { "TSelf", "T" }, DefaultType = typeof(ParserDefaults))]
             public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
 
-            public class Color : IParser<Color> {
+            public class {|#0:Color|} : IParser<Color> {
                 public static bool TryParse(string input, out Color result) {
                     result = new Color();
                     return true;
@@ -494,7 +539,12 @@ public class StaticAbstractAnalyzerTests {
             }
             """;
 
-        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test));
+        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticVirtualMethodNotImplemented.Id)
+            .WithLocation(0)
+            .WithArguments("Color", "Parse", "IParser")
+            .WithSeverity(DiagnosticSeverity.Hidden);
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
     }
 
     [Fact]
@@ -702,5 +752,236 @@ public class StaticAbstractAnalyzerTests {
             """;
 
         await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test));
+    }
+
+    [Fact]
+    public async Task TestTargetTypeNotPartial_WhenImplementInTargetTypes_ReportsDiagnostic() {
+        var test =
+            """
+            public delegate bool TryParse<T>(string input, out T result);
+            public delegate T Parse<T>(string input);
+
+            public static class ParserDefaults {
+                public static T Parse<T>(string input) where T : IParser<T> => throw null!;
+            }
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), new[] { "TSelf", "T" })]
+            [StaticVirtual("Parse", typeof(Parse<object>), new[] { "TSelf", "T" }, DefaultType = typeof(ParserDefaults), ImplementInTargetTypes = true)]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+            public class {|#0:Color|} : IParser<Color> {
+                public static bool TryParse(string input, out Color result) {
+                    result = new Color();
+                    return true;
+                }
+            }
+            """;
+
+        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticVirtualTargetTypeNotPartial.Id)
+            .WithLocation(0)
+            .WithArguments("Color", "IParser", "Parse");
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
+
+    [Fact]
+    public async Task TestTargetTypePartial_WhenImplementInTargetTypes_ReportsIMPL018() {
+        var test =
+            """
+            public delegate bool TryParse<T>(string input, out T result);
+            public delegate T Parse<T>(string input);
+
+            public static class ParserDefaults {
+                public static T Parse<T>(string input) where T : IParser<T> => throw null!;
+            }
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), new[] { "TSelf", "T" })]
+            [StaticVirtual("Parse", typeof(Parse<object>), new[] { "TSelf", "T" }, DefaultType = typeof(ParserDefaults), ImplementInTargetTypes = true)]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+            public partial class {|#0:Color|} : IParser<Color> {
+                public static bool TryParse(string input, out Color result) {
+                    result = new Color();
+                    return true;
+                }
+            }
+            """;
+
+        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticVirtualMethodNotImplemented.Id)
+            .WithLocation(0)
+            .WithArguments("Color", "Parse", "IParser")
+            .WithSeverity(Microsoft.CodeAnalysis.DiagnosticSeverity.Hidden);
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
+
+    [Fact]
+    public async Task TestTargetTypePartial_WhenMethodImplemented_NoDiagnostics() {
+        var test =
+            """
+            public delegate bool TryParse<T>(string input, out T result);
+            public delegate T Parse<T>(string input);
+
+            public static class ParserDefaults {
+                public static T Parse<T>(string input) where T : IParser<T> => throw null!;
+            }
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), new[] { "TSelf", "T" })]
+            [StaticVirtual("Parse", typeof(Parse<object>), new[] { "TSelf", "T" }, DefaultType = typeof(ParserDefaults), ImplementInTargetTypes = true)]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+            public partial class Color : IParser<Color> {
+                public static bool TryParse(string input, out Color result) {
+                    result = new Color();
+                    return true;
+                }
+                public static Color Parse(string input) => new Color();
+            }
+            """;
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test));
+    }
+
+    [Fact]
+    public async Task TestTargetTypeNotPartial_WhenTypeProvidesExplicitOverride_NoDiagnostics() {
+        var test =
+            """
+            public delegate bool TryParse<T>(string input, out T result);
+            public delegate T Parse<T>(string input);
+
+            public static class ParserDefaults {
+                public static T Parse<T>(string input) where T : IParser<T> => throw null!;
+            }
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), new[] { "TSelf", "T" })]
+            [StaticVirtual("Parse", typeof(Parse<object>), new[] { "TSelf", "T" }, DefaultType = typeof(ParserDefaults), ImplementInTargetTypes = true)]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+            public class Color : IParser<Color> {
+                public static bool TryParse(string input, out Color result) {
+                    result = new Color();
+                    return true;
+                }
+                public static Color Parse(string input) => new Color();
+            }
+            """;
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test));
+    }
+
+    [Fact]
+    public async Task TestTargetTypeNotPartial_WhenImplementInTargetTypesAttributeOnInterface_ReportsDiagnostic() {
+        var test =
+            """
+            public delegate bool TryParse<T>(string input, out T result);
+            public delegate T Parse<T>(string input);
+
+            public static class ParserDefaults {
+                public static T Parse<T>(string input) where T : IParser<T> => throw null!;
+            }
+
+            [ImplementInTargetTypes]
+            [StaticAbstract("TryParse", typeof(TryParse<object>), new[] { "TSelf", "T" })]
+            [StaticVirtual("Parse", typeof(Parse<object>), new[] { "TSelf", "T" }, DefaultType = typeof(ParserDefaults))]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+            public class {|#0:Color|} : IParser<Color> {
+                public static bool TryParse(string input, out Color result) {
+                    result = new Color();
+                    return true;
+                }
+            }
+            """;
+
+        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticVirtualTargetTypeNotPartial.Id)
+            .WithLocation(0)
+            .WithArguments("Color", "IParser", "Parse");
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
+
+    [Fact]
+    public async Task TestTargetTypeNotPartial_WhenImplementInTargetTypesAttributeOnClass_ReportsDiagnostic() {
+        var test =
+            """
+            public delegate bool TryParse<T>(string input, out T result);
+            public delegate T Parse<T>(string input);
+
+            public static class ParserDefaults {
+                public static T Parse<T>(string input) where T : IParser<T> => throw null!;
+            }
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), new[] { "TSelf", "T" })]
+            [StaticVirtual("Parse", typeof(Parse<object>), new[] { "TSelf", "T" }, DefaultType = typeof(ParserDefaults))]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+            [ImplementInTargetTypes]
+            public class {|#0:Color|} : IParser<Color> {
+                public static bool TryParse(string input, out Color result) {
+                    result = new Color();
+                    return true;
+                }
+            }
+            """;
+
+        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticVirtualTargetTypeNotPartial.Id)
+            .WithLocation(0)
+            .WithArguments("Color", "IParser", "Parse");
+
+        await VerifyStaticAbstract.VerifyAnalyzerAsync(CreateTestSource(test), expected);
+    }
+
+    [Fact]
+    public async Task TestTargetTypePartial_WhenGeneratedImplementationExists_ReportsIMPL018() {
+        var userSource = CreateTestSource(
+            """
+            public delegate bool TryParse<T>(string input, out T result);
+            public delegate T Parse<T>(string input);
+
+            public static class ParserDefaults {
+                public static T Parse<T>(string input) where T : IParser<T> => throw null!;
+            }
+
+            [StaticAbstract("TryParse", typeof(TryParse<object>), new[] { "TSelf", "T" })]
+            [StaticVirtual("Parse", typeof(Parse<object>), new[] { "TSelf", "T" }, DefaultType = typeof(ParserDefaults), ImplementInTargetTypes = true)]
+            public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+            public partial class {|#0:Box|}<T> : IParser<Box<T>> {
+                public static bool TryParse(string input, out Box<T> result) {
+                    result = new Box<T>();
+                    return true;
+                }
+            }
+            """
+        );
+
+        var generatedSource =
+            """
+            // <auto-generated/>
+            #nullable enable
+            #pragma warning disable
+
+            namespace TestNamespace {
+                [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Implyzer", "1.0.0")]
+                public partial class Box<T> {
+                    public static global::TestNamespace.Box<T> Parse(string input) {
+                        return global::TestNamespace.ParserDefaults.Parse<global::TestNamespace.Box<T>>(input);
+                    }
+                }
+            }
+            """;
+
+        var expected = VerifyStaticAbstract.Diagnostic(Rules.StaticVirtualMethodNotImplemented.Id)
+            .WithLocation(0)
+            .WithArguments("Box", "Parse", "IParser")
+            .WithSeverity(DiagnosticSeverity.Hidden);
+
+        await VerifyStaticAbstract.VerifyAnalyzerWithSourcesAsync(
+            new[] {
+                ("Test0.cs", userSource),
+                ("Test0_StaticVirtual.g.cs", generatedSource)
+            },
+            expected
+        );
     }
 }

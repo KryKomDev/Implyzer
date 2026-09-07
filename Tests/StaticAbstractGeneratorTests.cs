@@ -28,6 +28,7 @@ public class StaticAbstractGeneratorTests {
                     public Type? TargetClass { get; }
                     public Type? DefaultType { get; set; }
                     public string? DefaultMethod { get; set; }
+                    public bool ImplementInTargetTypes { get; set; }
 
                     public StaticAbstractAttribute(string methodName, Type signature, params string[] typeParams) {
                         MethodName = methodName;
@@ -81,6 +82,12 @@ public class StaticAbstractGeneratorTests {
                     public StaticRegisterAttribute(params Type[] types) {
                         Types = types ?? Type.EmptyTypes;
                     }
+                }
+
+                [AttributeUsage(AttributeTargets.Interface | AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Assembly, Inherited = false, AllowMultiple = false)]
+                public sealed class ImplementInTargetTypesAttribute : Attribute {
+                    public bool Enabled { get; }
+                    public ImplementInTargetTypesAttribute(bool enabled = true) { Enabled = enabled; }
                 }
             }
             """;
@@ -1143,4 +1150,220 @@ public class StaticAbstractGeneratorTests {
         Assert.Contains("global::TestNamespace.ParserRegistry.G_Register_Parse_String(typeof(global::TestNamespace.MyParser)", moduleInitializerSource);
         Assert.Contains("global::TestNamespace.ParserRegistry.G_Register_Parse_String_Int32(typeof(global::TestNamespace.MyParser)", moduleInitializerSource);
     }
-}
+
+    [Fact]
+    public void TestImplementInTargetTypes_GeneratesMethodInsideTargetType() {
+        const string source =
+            """
+            using System;
+            using Implyzer;
+
+            namespace TestNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+                public delegate T Parse<T>(string input);
+
+                public static class ParserDefaults {
+                    public static T Parse<T>(string input) where T : IParser<T> => default!;
+                }
+
+                [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                [StaticVirtual("Parse", typeof(Parse<object>), "TSelf", "T", DefaultType = typeof(ParserDefaults), ImplementInTargetTypes = true)]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+                public partial class Color : IParser<Color> {
+                    public static bool TryParse(string input, out Color result) {
+                        result = new Color();
+                        return true;
+                    }
+                }
+            }
+            """;
+
+        var             compilation = CreateCompilation(source, LanguageVersion.CSharp11, enableVirtualStatics: true);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        var generatedFile = runResult.GeneratedTrees.FirstOrDefault(t => t.FilePath.EndsWith("TestNamespace_Color_StaticVirtual.g.cs"));
+        Assert.NotNull(generatedFile);
+
+        var generatedSource = generatedFile.ToString();
+        Assert.Contains("partial class Color", generatedSource);
+        Assert.Contains("public static global::TestNamespace.Color Parse(string input)", generatedSource);
+        Assert.Contains("global::TestNamespace.ParserDefaults.Parse<global::TestNamespace.Color>(input)", generatedSource);
+    }
+
+    [Fact]
+    public void TestImplementInTargetTypes_GenericTargetType() {
+        const string source =
+            """
+            using System;
+            using Implyzer;
+
+            namespace TestNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+                public delegate T Parse<T>(string input);
+
+                public static class ParserDefaults {
+                    public static T Parse<T>(string input) where T : IParser<T> => default!;
+                }
+
+                [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                [StaticVirtual("Parse", typeof(Parse<object>), "TSelf", "T", DefaultType = typeof(ParserDefaults), ImplementInTargetTypes = true)]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+                public partial class Wrapper<T> : IParser<Wrapper<T>> {
+                    public static bool TryParse(string input, out Wrapper<T> result) {
+                        result = new Wrapper<T>();
+                        return true;
+                    }
+                }
+            }
+            """;
+
+        var             compilation = CreateCompilation(source, LanguageVersion.CSharp11, enableVirtualStatics: true);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        var generatedFile = runResult.GeneratedTrees.FirstOrDefault(t => t.FilePath.EndsWith("TestNamespace_Wrapper_T_StaticVirtual.g.cs"));
+        Assert.NotNull(generatedFile);
+
+        var generatedSource = generatedFile.ToString();
+        Assert.Contains("partial class Wrapper<T>", generatedSource);
+        Assert.Contains("public static global::TestNamespace.Wrapper<T> Parse(string input)", generatedSource);
+        Assert.Contains("global::TestNamespace.ParserDefaults.Parse<global::TestNamespace.Wrapper<T>>(input)", generatedSource);
+    }
+
+    [Fact]
+    public void TestImplementInTargetTypes_AttributeOnInterface() {
+        const string source =
+            """
+            using System;
+            using Implyzer;
+
+            namespace TestNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+                public delegate T Parse<T>(string input);
+
+                public static class ParserDefaults {
+                    public static T Parse<T>(string input) where T : IParser<T> => default!;
+                }
+
+                [ImplementInTargetTypes]
+                [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                [StaticVirtual("Parse", typeof(Parse<object>), "TSelf", "T", DefaultType = typeof(ParserDefaults))]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+                public partial class Color : IParser<Color> {
+                    public static bool TryParse(string input, out Color result) {
+                        result = new Color();
+                        return true;
+                    }
+                }
+            }
+            """;
+
+        var             compilation = CreateCompilation(source, LanguageVersion.CSharp11, enableVirtualStatics: true);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        var generatedFile = runResult.GeneratedTrees.FirstOrDefault(t => t.FilePath.EndsWith("TestNamespace_Color_StaticVirtual.g.cs"));
+        Assert.NotNull(generatedFile);
+
+        var generatedSource = generatedFile.ToString();
+        Assert.Contains("partial class Color", generatedSource);
+        Assert.Contains("public static global::TestNamespace.Color Parse(string input)", generatedSource);
+    }
+
+    [Fact]
+    public void TestImplementInTargetTypes_AttributeOnClass() {
+        const string source =
+            """
+            using System;
+            using Implyzer;
+
+            namespace TestNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+                public delegate T Parse<T>(string input);
+
+                public static class ParserDefaults {
+                    public static T Parse<T>(string input) where T : IParser<T> => default!;
+                }
+
+                [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                [StaticVirtual("Parse", typeof(Parse<object>), "TSelf", "T", DefaultType = typeof(ParserDefaults))]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+                [ImplementInTargetTypes]
+                public partial class Color : IParser<Color> {
+                    public static bool TryParse(string input, out Color result) {
+                        result = new Color();
+                        return true;
+                    }
+                }
+            }
+            """;
+
+        var             compilation = CreateCompilation(source, LanguageVersion.CSharp11, enableVirtualStatics: true);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        var generatedFile = runResult.GeneratedTrees.FirstOrDefault(t => t.FilePath.EndsWith("TestNamespace_Color_StaticVirtual.g.cs"));
+        Assert.NotNull(generatedFile);
+
+        var generatedSource = generatedFile.ToString();
+        Assert.Contains("partial class Color", generatedSource);
+        Assert.Contains("public static global::TestNamespace.Color Parse(string input)", generatedSource);
+    }
+
+    [Fact]
+    public void TestImplementInTargetTypes_ExplicitOverride_DoesNotGenerateMethod() {
+        const string source =
+            """
+            using System;
+            using Implyzer;
+
+            namespace TestNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+                public delegate T Parse<T>(string input);
+
+                public static class ParserDefaults {
+                    public static T Parse<T>(string input) where T : IParser<T> => default!;
+                }
+
+                [StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                [StaticVirtual("Parse", typeof(Parse<object>), "TSelf", "T", DefaultType = typeof(ParserDefaults), ImplementInTargetTypes = true)]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+
+                public partial class Color : IParser<Color> {
+                    public static bool TryParse(string input, out Color result) {
+                        result = new Color();
+                        return true;
+                    }
+                    public static Color Parse(string input) => new Color();
+                }
+            }
+            """;
+
+        var             compilation = CreateCompilation(source, LanguageVersion.CSharp11, enableVirtualStatics: true);
+        var             generator   = new StaticAbstractGenerator();
+        GeneratorDriver driver      = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        var generatedFile = runResult.GeneratedTrees.FirstOrDefault(t => t.FilePath.EndsWith("TestNamespace_Color_StaticVirtual.g.cs"));
+        Assert.Null(generatedFile);
+    }
+}

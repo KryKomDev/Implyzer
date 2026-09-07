@@ -189,6 +189,9 @@ public class Color : IParser<Color>
 // Call via generated companion class:
 var success = IParser.TryParse<Color>("red", out var color);
 var parsed  = IParser.Parse<Color>("red"); // invokes default implementation
+
+// Or enable ImplementInTargetTypes = true (or [ImplementInTargetTypes]) to call directly on partial target types:
+// Color.Parse("red");
 ```
 
 ### 6. Use Instead

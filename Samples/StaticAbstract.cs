@@ -34,13 +34,14 @@ public static class CustomParsableDefaults {
 /// [StaticRegister] allows duck typing for external/BCL types that match method/property signatures.
 /// </summary>
 [StaticAbstract("TryParse", typeof(TryParse<>), "TSelf", "T")]
-[StaticVirtual("Parse", typeof(Parse<>), "TSelf", "T", DefaultType = typeof(CustomParsableDefaults))]
+[StaticVirtual("Parse", typeof(Parse<>), "TSelf", "T", DefaultType = typeof(CustomParsableDefaults), ImplementInTargetTypes = true)]
 [StaticRegister(typeof(int), typeof(Guid))]
 public partial interface ICustomParsable<TSelf> where TSelf : ICustomParsable<TSelf>;
 
 // VALID: True implements ICustomParsable<True> and provides TryParse.
-// Parse is omitted: it uses the default implementation provided by CustomParsableDefaults!
-public class True : ICustomParsable<True> {
+// Parse is omitted: it uses the default implementation provided by CustomParsableDefaults,
+// and because ImplementInTargetTypes is true, True.Parse is generated directly on True!
+public partial class True : ICustomParsable<True> {
 
     public static bool TryParse([NotNullWhen(true)] string? input, [MaybeNullWhen(false)] out True result) {
         if (input == "true") {
@@ -75,7 +76,7 @@ public class False : ICustomParsable<False> {
 
     public static False Parse([NotNullWhen(true)] string? input) =>
         TryParse(input, out var result)
-            ? result!
+            ? result
             : throw new ArgumentException($"Invalid false string: '{input}'");
 
     public override string ToString() => "false";
@@ -83,7 +84,7 @@ public class False : ICustomParsable<False> {
 
 // VALID: Open generic type Box<T> implements ICustomParsable<Box<T>>.
 // Implyzer's static abstract simulator registers and resolves open generic types seamlessly!
-public class Box<T> : ICustomParsable<Box<T>> {
+public partial class Box<T> : ICustomParsable<Box<T>> {
     public static bool TryParse([NotNullWhen(true)] string? input, [MaybeNullWhen(false)] out Box<T> result) {
         if (!string.IsNullOrEmpty(input)) {
             result = new Box<T>();
@@ -136,6 +137,10 @@ public class Program {
         // True uses the default implementation in CustomParsableDefaults.Parse:
         var trueParsed = ICustomParsable.Parse<True>("true");
         Console.WriteLine($"Default Parse ('true' -> Implyzer.Sample.True): {trueParsed}");
+
+        // Direct target type method call (generated because ImplementInTargetTypes = true):
+        var trueDirect = True.Parse("true");
+        Console.WriteLine($"Direct target type Parse ('true' -> Implyzer.Sample.True): {trueDirect}");
 
         // False uses its explicit override:
         var falseParsed = ICustomParsable.Parse<False>("false");

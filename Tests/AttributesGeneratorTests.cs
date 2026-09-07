@@ -21,17 +21,18 @@ public class AttributesGeneratorTests {
         driver = driver.RunGenerators(compilation);
         var runResult = driver.GetRunResult();
 
-        // Should have generated 7 files (ImplTypeAttribute, IndirectImplAttribute, UseInsteadAttribute, StaticAbstractAttribute, StaticVirtualAttribute, StaticDefaultAttribute, StaticRegisterAttribute)
-        Assert.Equal(7, runResult.GeneratedTrees.Length);
+        // Should have generated 8 files (ImplTypeAttribute, IndirectImplAttribute, UseInsteadAttribute, StaticAbstractAttribute, StaticVirtualAttribute, StaticDefaultAttribute, StaticRegisterAttribute, ImplementInTargetTypesAttribute)
+        Assert.Equal(8, runResult.GeneratedTrees.Length);
 
         var fileNames = runResult.GeneratedTrees.Select(t => Path.GetFileName(t.FilePath)).ToList();
-        Assert.Contains("ImplTypeAttribute.g.cs",       fileNames);
-        Assert.Contains("IndirectImplAttribute.g.cs",   fileNames);
-        Assert.Contains("UseInsteadAttribute.g.cs",     fileNames);
-        Assert.Contains("StaticAbstractAttribute.g.cs", fileNames);
-        Assert.Contains("StaticVirtualAttribute.g.cs",  fileNames);
-        Assert.Contains("StaticDefaultAttribute.g.cs",  fileNames);
-        Assert.Contains("StaticRegisterAttribute.g.cs", fileNames);
+        Assert.Contains("ImplTypeAttribute.g.cs",              fileNames);
+        Assert.Contains("IndirectImplAttribute.g.cs",          fileNames);
+        Assert.Contains("UseInsteadAttribute.g.cs",            fileNames);
+        Assert.Contains("StaticAbstractAttribute.g.cs",        fileNames);
+        Assert.Contains("StaticVirtualAttribute.g.cs",         fileNames);
+        Assert.Contains("StaticDefaultAttribute.g.cs",         fileNames);
+        Assert.Contains("StaticRegisterAttribute.g.cs",        fileNames);
+        Assert.Contains("ImplementInTargetTypesAttribute.g.cs", fileNames);
 
         // Verify that they are public
         var implTypeTree = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("ImplTypeAttribute.g.cs"));
@@ -71,15 +72,16 @@ public class AttributesGeneratorTests {
 
         // ImplTypeAttribute should not be generated because it already exists in compilation,
         // but other attributes should still be generated.
-        Assert.Equal(6, runResult.GeneratedTrees.Length);
+        Assert.Equal(7, runResult.GeneratedTrees.Length);
 
         var fileNames = runResult.GeneratedTrees.Select(t => Path.GetFileName(t.FilePath)).ToList();
-        Assert.DoesNotContain("ImplTypeAttribute.g.cs", fileNames);
-        Assert.Contains("IndirectImplAttribute.g.cs",   fileNames);
-        Assert.Contains("UseInsteadAttribute.g.cs",     fileNames);
-        Assert.Contains("StaticAbstractAttribute.g.cs", fileNames);
-        Assert.Contains("StaticVirtualAttribute.g.cs",  fileNames);
-        Assert.Contains("StaticDefaultAttribute.g.cs",  fileNames);
-        Assert.Contains("StaticRegisterAttribute.g.cs", fileNames);
+        Assert.DoesNotContain("ImplTypeAttribute.g.cs",        fileNames);
+        Assert.Contains("IndirectImplAttribute.g.cs",          fileNames);
+        Assert.Contains("UseInsteadAttribute.g.cs",            fileNames);
+        Assert.Contains("StaticAbstractAttribute.g.cs",        fileNames);
+        Assert.Contains("StaticVirtualAttribute.g.cs",         fileNames);
+        Assert.Contains("StaticDefaultAttribute.g.cs",         fileNames);
+        Assert.Contains("StaticRegisterAttribute.g.cs",        fileNames);
+        Assert.Contains("ImplementInTargetTypesAttribute.g.cs", fileNames);
     }
 }
