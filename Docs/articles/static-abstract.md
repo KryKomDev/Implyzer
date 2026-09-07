@@ -41,11 +41,23 @@ public StaticAbstractAttribute(
 
 -   **`DefaultType`** (`Type?`): Specifies the type (e.g., a static defaults class or another interface) containing the fallback static method implementation. If omitted, defaults to the interface itself.
 -   **`DefaultMethod`** (`string?`): The name of the static default method on `DefaultType`. If omitted, defaults to `methodName`.
+-   **`ImplementInTargetTypes`** (`bool`): When `true` (or via alias `GenerateInTargetTypes`), Implyzer generates static method implementations directly inside implementing types that do not explicitly provide one. Implementing types must be marked as `partial`.
 
 ### 1.3 `[StaticVirtual]` and `[StaticDefault]`
 
 -   **`[StaticVirtualAttribute]`**: Derived from `[StaticAbstractAttribute]`, this attribute makes the intent explicit that a static member is virtual and has a default implementation. In C# 11+, Implyzer emits `public static virtual` on the interface.
 -   **`[StaticDefaultAttribute]`**: Placed on a static method to explicitly mark it as the default implementation for a specific static abstract or virtual member name.
+
+### 1.4 `[ImplementInTargetTypes]`
+
+The `[ImplementInTargetTypes]` attribute can be applied at multiple levels to automatically generate static virtual method implementations directly inside implementing target types:
+-   **Interface level**: Automatically enables generation for all static virtual methods of that interface.
+-   **Target type level**: On a specific implementing `partial class` or `partial struct` to opt that type in.
+-   **Assembly level**: Enforces target type implementations across the entire assembly:
+    ```csharp
+    [assembly: ImplementInTargetTypes]
+    ```
+You can also explicitly pass `false` (e.g. `[ImplementInTargetTypes(false)]`) to opt a specific interface or type out of an assembly-wide policy.
 
 ---
 
@@ -126,6 +138,37 @@ public class CustomColor : IParser<CustomColor>
     public static CustomColor Parse(string input) => new CustomColor();
 }
 ```
+
+### 2.4 Generating Implementations in Target Types
+
+By default, static virtual methods with default implementations can be called through the interface (`TSelf.Parse(...)` in generic contexts) or via companion class helpers (`IParser.Parse<Color>(...)`).
+
+If you want callers to be able to call the method directly on the implementing type itself (e.g. `Color.Parse("red")`), enable target type generation using `ImplementInTargetTypes = true` or `[ImplementInTargetTypes]`:
+
+```csharp
+[StaticAbstract(nameof(TryParse), typeof(TryParse<>), "TSelf", "T")]
+[StaticVirtual(nameof(Parse), typeof(Parse<>), "TSelf", "T", DefaultType = typeof(ParserDefaults), ImplementInTargetTypes = true)]
+public partial interface IParser<TSelf> where TSelf : IParser<TSelf> { }
+
+// The target class must be marked as partial:
+public partial class Color : IParser<Color>
+{
+    public static bool TryParse(string input, out Color? result)
+    {
+        result = new Color();
+        return true;
+    }
+    // Color.Parse is generated automatically by Implyzer:
+    // public static Color Parse(string input) => ParserDefaults.Parse<Color>(input);
+}
+
+// Can now be called directly on Color!
+Color c = Color.Parse("red");
+```
+
+> [!NOTE]
+> If a target type already defines an explicit method matching the static virtual signature, Implyzer will not generate a duplicate, avoiding CS0111 compiler errors.
+> You can also use the IDE Code Fix / Refactoring (`Ctrl+.` / `Alt+Enter`) on any implementing class or struct to implement any static virtual method (or all at once) delegating directly to the default implementation. The fix is always accessible on implementing types until the method is already implemented.
 
 ---
 
@@ -253,3 +296,5 @@ Implyzer's static abstract analyzer reports compile-time errors to ensure type s
 | `IMPL014` | Static Register Missing Member | A type registered via `[StaticRegister]` does not implement a required static abstract or virtual member. |
 | `IMPL015` | Static Register Non-Static-Abstract Interface | Target interface specified in `[StaticRegister]` has no `[StaticAbstract]` or `[StaticVirtual]` attributes. |
 | `IMPL016` | Static Register Redundant Registration | A type registered via `[StaticRegister]` already explicitly implements the target interface. |
+| `IMPL017` | Target Type Not Partial | Target type must be declared as `partial` when `ImplementInTargetTypes` is enabled for a static virtual method. |
+| `IMPL018` | Static Virtual Method Not Implemented | Target type does not implement static virtual method (Hidden diagnostic enabling IDE code fix until implemented). |

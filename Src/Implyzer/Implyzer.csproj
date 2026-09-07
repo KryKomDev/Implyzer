@@ -50,6 +50,7 @@
         <EmbeddedResource Include="Templates\StaticVirtualAttribute.cs"/>
         <EmbeddedResource Include="Templates\StaticDefaultAttribute.cs"/>
         <EmbeddedResource Include="Templates\StaticRegisterAttribute.cs"/>
+        <EmbeddedResource Include="Templates\ImplementInTargetTypesAttribute.cs"/>
     </ItemGroup>
 
     <ItemGroup>

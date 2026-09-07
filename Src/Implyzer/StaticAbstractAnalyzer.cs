@@ -152,8 +152,104 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
             if (info.DelegateSymbol.TypeKind != TypeKind.Delegate)
                 continue;
 
-            if (info.HasDefaultImplementation)
+            if (info.HasDefaultImplementation) {
+                var effectiveImplementInTargetTypes = info.ImplementInTargetTypes ?? (
+                    HasImplementInTargetTypesAttribute(iface.OriginalDefinition) ||
+                    HasImplementInTargetTypesAttribute(typeSymbol) ||
+                    HasImplementInTargetTypesAttribute(context.Compilation.Assembly)
+                );
+
+                var defTypeArgs = new ITypeSymbol[info.DelegateSymbol.TypeParameters.Length];
+
+                for (var i = 0; i < info.DelegateSymbol.TypeParameters.Length; i++) {
+                    var          dtp        = info.DelegateSymbol.TypeParameters[i];
+                    ITypeSymbol? mappedType = null;
+
+                    for (var j = 0; j < iface.OriginalDefinition.TypeParameters.Length; j++) {
+                        var itp = iface.OriginalDefinition.TypeParameters[j];
+
+                        if (info.TypeParams.TryGetValue(itp.Name, out var targetName) && targetName == dtp.Name) {
+                            mappedType = iface.TypeArguments[j];
+
+                            break;
+                        }
+                    }
+
+                    defTypeArgs[i] = mappedType ?? dtp;
+                }
+
+                var constructedDefDelegate = info.DelegateSymbol.OriginalDefinition.Construct(defTypeArgs);
+                var defDelegateInvoke      = constructedDefDelegate.DelegateInvokeMethod;
+
+                if (defDelegateInvoke != null) {
+                    var hasMatch = typeSymbol.GetMembers(info.MethodName)
+                        .OfType<IMethodSymbol>()
+                        .Any(m => !IsGenerated(m) && m.IsStatic && m.DeclaredAccessibility == Accessibility.Public && MethodMatchesSignature(m, defDelegateInvoke));
+
+                    if (!hasMatch) {
+                        var defReturnAttributes = FormatReturnAttributes(defDelegateInvoke.OriginalDefinition.GetReturnTypeAttributes());
+                        var defReturnTypeFqn    = defReturnAttributes + defDelegateInvoke.ReturnType.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY);
+
+                        var defParamStrings = defDelegateInvoke.Parameters.Select(
+                            p => {
+                                var refKind = p.RefKind switch {
+                                    RefKind.Ref => "ref ",
+                                    RefKind.Out => "out ",
+                                    RefKind.In  => "in ",
+                                    _           => p.IsParams ? "params " : ""
+                                };
+
+                                var attrs = FormatAttributes(p.OriginalDefinition.GetAttributes());
+
+                                return $"{attrs}{refKind}{p.Type.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY)} {p.Name}";
+                            }
+                        );
+
+                        var defParamsText = string.Join(", ", defParamStrings);
+
+                        string? defaultCall = null;
+                        if (info.DefaultMethodSymbol != null) {
+                            defaultCall = BuildDefaultMethodCall(info, iface, defDelegateInvoke, typeSymbol);
+                        }
+
+                        var propBuilder = ImmutableDictionary.CreateBuilder<string, string?>();
+                        propBuilder.Add("MethodName", info.MethodName);
+                        propBuilder.Add("ReturnType", defReturnTypeFqn);
+                        propBuilder.Add("Parameters", defParamsText);
+                        if (defaultCall != null)
+                            propBuilder.Add("DefaultCall", defaultCall);
+
+                        var targetLocation = GetUserDeclarationLocation(typeSymbol);
+
+                        if (effectiveImplementInTargetTypes && !IsPartial(typeSymbol)) {
+                            context.ReportDiagnostic(
+                                Diagnostic.Create(
+                                    Rules.StaticVirtualTargetTypeNotPartial,
+                                    targetLocation,
+                                    propBuilder.ToImmutable(),
+                                    typeSymbol.Name,
+                                    iface.Name,
+                                    info.MethodName
+                                )
+                            );
+                        }
+                        else {
+                            context.ReportDiagnostic(
+                                Diagnostic.Create(
+                                    Rules.StaticVirtualMethodNotImplemented,
+                                    targetLocation,
+                                    propBuilder.ToImmutable(),
+                                    typeSymbol.Name,
+                                    info.MethodName,
+                                    iface.Name
+                                )
+                            );
+                        }
+                    }
+                }
+
                 continue;
+            }
 
             // Build type arguments for constructed delegate
             var typeArgs = new ITypeSymbol[info.DelegateSymbol.TypeParameters.Length];
@@ -184,7 +280,7 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
             // Check if typeSymbol implements a public static method matching signature
             var matches = typeSymbol.GetMembers(info.MethodName)
                 .OfType<IMethodSymbol>()
-                .Any(m => m.IsStatic && m.DeclaredAccessibility == Accessibility.Public && MethodMatchesSignature(m, delegateInvoke));
+                .Any(m => !IsGenerated(m) && m.IsStatic && m.DeclaredAccessibility == Accessibility.Public && MethodMatchesSignature(m, delegateInvoke));
 
             if (matches)
                 continue;
@@ -217,7 +313,7 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
             context.ReportDiagnostic(
                 Diagnostic.Create(
                     Rules.StaticAbstractMethodNotImplemented,
-                    typeSymbol.Locations[0],
+                    GetUserDeclarationLocation(typeSymbol),
                     properties,
                     typeSymbol.Name,
                     info.MethodName,
@@ -225,6 +321,95 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
                     iface.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)
                 )
             );
+        }
+    }
+
+    private static bool HasImplementInTargetTypesAttribute(ISymbol symbol) {
+        return symbol.GetAttributes().Any(a =>
+            a.AttributeClass?.Name is "ImplementInTargetTypesAttribute" or "ImplementInTargetTypes" or "GenerateInTargetTypesAttribute" or "GenerateInTargetTypes" &&
+            (a.ConstructorArguments.Length == 0 || a.ConstructorArguments[0].Value is true)
+        );
+    }
+
+    private static string BuildDefaultMethodCall(
+        StaticAbstractInfo info,
+        INamedTypeSymbol   iface,
+        IMethodSymbol      delegateInvoke,
+        INamedTypeSymbol   targetType
+    ) {
+        var defaultMethod = info.DefaultMethodSymbol!;
+        var lookupType    = info.ResolvedDefaultType ?? info.DefaultType ?? info.TargetClass ?? iface;
+
+        var argList = string.Join(
+            ", ",
+            delegateInvoke.Parameters.Select(
+                p => {
+                    var refKind = p.RefKind switch {
+                        RefKind.Ref => "ref ",
+                        RefKind.Out => "out ",
+                        RefKind.In  => "in ",
+                        _           => ""
+                    };
+
+                    return $"{refKind}{p.Name}";
+                }
+            )
+        );
+
+        if (SymbolEqualityComparer.Default.Equals(lookupType, iface)) {
+            var ifaceFqn = iface.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY);
+            return $"{ifaceFqn}.{defaultMethod.Name}({argList})";
+        }
+        else {
+            var typeFqn = lookupType.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY);
+
+            if (defaultMethod.IsGenericMethod) {
+                var methodTypeArguments = new List<string>();
+
+                for (var i = 0; i < defaultMethod.TypeParameters.Length; i++) {
+                    var          dtp    = defaultMethod.TypeParameters[i];
+                    ITypeSymbol? mapped = null;
+
+                    for (var j = 0; j < iface.OriginalDefinition.TypeParameters.Length; j++) {
+                        var itp = iface.OriginalDefinition.TypeParameters[j];
+
+                        if (itp.Name == dtp.Name) {
+                            mapped = iface.TypeArguments[j];
+
+                            break;
+                        }
+                    }
+
+                    if (mapped == null) {
+                        foreach (var kvp in info.TypeParams) {
+                            if (kvp.Value == dtp.Name) {
+                                for (var j = 0; j < iface.OriginalDefinition.TypeParameters.Length; j++) {
+                                    if (iface.OriginalDefinition.TypeParameters[j].Name == kvp.Key) {
+                                        mapped = iface.TypeArguments[j];
+
+                                        break;
+                                    }
+                                }
+
+                                if (mapped != null) break;
+                            }
+                        }
+                    }
+
+                    if (mapped == null && i < iface.TypeArguments.Length) {
+                        mapped = iface.TypeArguments[i];
+                    }
+
+                    mapped ??= targetType;
+                    methodTypeArguments.Add(mapped.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY));
+                }
+
+                var typeArgsStr = $"<{string.Join(", ", methodTypeArguments)}>";
+                return $"{typeFqn}.{defaultMethod.Name}{typeArgsStr}({argList})";
+            }
+            else {
+                return $"{typeFqn}.{defaultMethod.Name}({argList})";
+            }
         }
     }
 
@@ -810,11 +995,15 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
         INamedTypeSymbol? defaultType    = null;
         string?           defaultMethod  = null;
 
+        bool? implementInTargetTypes = null;
+
         foreach (var namedArg in attribute.NamedArguments) {
             if (namedArg is { Key: "DefaultType", Value.Value: INamedTypeSymbol dt })
                 defaultType = dt;
             else if (namedArg is { Key: "DefaultMethod", Value.Value: string dm })
                 defaultMethod = dm;
+            else if (namedArg.Key is "ImplementInTargetTypes" or "GenerateInTargetTypes" && namedArg.Value.Value is bool b)
+                implementInTargetTypes = b;
         }
 
         if (attribute.ConstructorArguments.Length < 2)
@@ -851,7 +1040,7 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
         if (methodName == null || delegateSymbol == null)
             return null;
 
-        var info = new StaticAbstractInfo(methodName, delegateSymbol, typeParams, targetClass, attribute, defaultType, defaultMethod, isVirtual);
+        var info = new StaticAbstractInfo(methodName, delegateSymbol, typeParams, targetClass, attribute, defaultType, defaultMethod, isVirtual, implementInTargetTypes);
 
         if (interfaceSymbol != null)
             ResolveDefaultImplementation(info, interfaceSymbol);
@@ -982,6 +1171,7 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
         public INamedTypeSymbol?          DefaultType              { get; }
         public string?                    DefaultMethod            { get; }
         public bool                       IsVirtual                { get; }
+        public bool?                      ImplementInTargetTypes   { get; }
         public bool                       HasDefaultImplementation { get; set; }
         public IMethodSymbol?             DefaultMethodSymbol      { get; set; }
         public INamedTypeSymbol?          ResolvedDefaultType      { get; set; }
@@ -994,16 +1184,73 @@ public class StaticAbstractAnalyzer : DiagnosticAnalyzer {
             AttributeData              attributeData,
             INamedTypeSymbol?          defaultType,
             string?                    defaultMethod,
-            bool                       isVirtual
+            bool                       isVirtual,
+            bool?                      implementInTargetTypes = null
         ) {
-            MethodName     = methodName;
-            DelegateSymbol = delegateSymbol;
-            TypeParams     = typeParams;
-            TargetClass    = targetClass;
-            AttributeData  = attributeData;
-            DefaultType    = defaultType;
-            DefaultMethod  = defaultMethod;
-            IsVirtual      = isVirtual;
+            MethodName             = methodName;
+            DelegateSymbol         = delegateSymbol;
+            TypeParams             = typeParams;
+            TargetClass            = targetClass;
+            AttributeData          = attributeData;
+            DefaultType            = defaultType;
+            DefaultMethod          = defaultMethod;
+            IsVirtual              = isVirtual;
+            ImplementInTargetTypes = implementInTargetTypes;
         }
+    }
+
+    private static bool IsGenerated(ISymbol symbol) {
+        if (symbol.GetAttributes().Any(a =>
+            a.AttributeClass?.Name is "GeneratedCodeAttribute" or "CompilerGeneratedAttribute")) {
+            return true;
+        }
+
+        foreach (var syntaxRef in symbol.DeclaringSyntaxReferences) {
+            if (IsGeneratedSyntaxTree(syntaxRef.SyntaxTree))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsGeneratedSyntaxTree(SyntaxTree? tree) {
+        if (tree == null)
+            return false;
+
+        var path = tree.FilePath;
+        if (!string.IsNullOrEmpty(path)) {
+            if (path.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase) ||
+                path.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase) ||
+                path.IndexOf(".StaticVirtual.g.cs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("_StaticVirtual.g.cs", StringComparison.OrdinalIgnoreCase) >= 0) {
+                return true;
+            }
+        }
+
+        var root = tree.GetRoot();
+        if (root.HasLeadingTrivia) {
+            foreach (var trivia in root.GetLeadingTrivia()) {
+                var text = trivia.ToString();
+                if (text.Contains("<auto-generated") || text.Contains("<autogenerated")) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static Location GetUserDeclarationLocation(INamedTypeSymbol typeSymbol) {
+        foreach (var syntaxRef in typeSymbol.DeclaringSyntaxReferences) {
+            if (!IsGeneratedSyntaxTree(syntaxRef.SyntaxTree)) {
+                var syntax = syntaxRef.GetSyntax();
+                if (syntax is BaseTypeDeclarationSyntax baseType) {
+                    return baseType.Identifier.GetLocation();
+                }
+                return syntax.GetLocation();
+            }
+        }
+
+        return typeSymbol.Locations.FirstOrDefault() ?? Location.None;
     }
 }

@@ -28,6 +28,11 @@ namespace Implyzer {
         public Dictionary<string, string> TypeParams    { get; }
         public Type?                      DefaultType   { get; set; }
         public string?                    DefaultMethod { get; set; }
+        public bool                       ImplementInTargetTypes { get; set; }
+        public bool                       GenerateInTargetTypes {
+            get => ImplementInTargetTypes;
+            set => ImplementInTargetTypes = value;
+        }
 
         public StaticAbstractAttribute(string methodName, Type signature, params string[] typeParams) {
             MethodName  = methodName;

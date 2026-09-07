@@ -1,6 +1,7 @@
 // Implyzer
 // Copyright (c) KryKom 2026
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -432,6 +433,9 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
         // Generate Module Initializer
         if (!isCSharp11OrGreater || conformingExternalTypes.Values.Any(list => list.Count > 0))
             GenerateModuleInitializer(spc, interfaceInfosMap, types, conformingExternalTypes, compilation, isCSharp11OrGreater);
+
+        // Generate Target Type Implementations for Static Virtual methods
+        GenerateTargetTypeImplementations(spc, interfaceInfosMap, types, compilation);
     }
 
     private static string GetConstructedInterfaceFqn(StaticAbstractInfo info, string lookupTypeName) {
@@ -1253,6 +1257,309 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
         spc.AddSource("StaticAbstractRegistry.g.cs", sb.ToString());
     }
 
+    private static bool IsPartial(INamedTypeSymbol symbol) {
+        return symbol.DeclaringSyntaxReferences
+            .Select(r => r.GetSyntax())
+            .OfType<TypeDeclarationSyntax>()
+            .Any(s => s.Modifiers.Any(SyntaxKind.PartialKeyword));
+    }
+
+    private static bool HasImplementInTargetTypesAttribute(ISymbol symbol) {
+        return symbol.GetAttributes().Any(a =>
+            a.AttributeClass?.Name is "ImplementInTargetTypesAttribute" or "ImplementInTargetTypes" or "GenerateInTargetTypesAttribute" or "GenerateInTargetTypes" &&
+            (a.ConstructorArguments.Length == 0 || a.ConstructorArguments[0].Value is true)
+        );
+    }
+
+    private static string GetSafeTypeName(INamedTypeSymbol type) {
+        var cur   = type;
+        var parts = new List<string>();
+
+        while (cur != null) {
+            var name = cur.Name;
+
+            if (cur.TypeParameters.Length > 0)
+                name += "_" + string.Join("_", cur.TypeParameters.Select(tp => tp.Name));
+
+            parts.Insert(0, name);
+            cur = cur.ContainingType;
+        }
+
+        return string.Join("_", parts);
+    }
+
+    private static void GenerateTargetTypeImplementations(
+        SourceProductionContext                                spc,
+        Dictionary<INamedTypeSymbol, List<StaticAbstractInfo>> interfaceInfosMap,
+        ImmutableArray<INamedTypeSymbol>                       types,
+        Compilation                                            compilation
+    ) {
+        var assemblyHasImplementInTargetTypes = HasImplementInTargetTypesAttribute(compilation.Assembly);
+
+        foreach (var type in types.Distinct(SymbolEqualityComparer.Default).Cast<INamedTypeSymbol>()) {
+            if (!IsPartial(type))
+                continue;
+
+            var typeHasImplementInTargetTypes = HasImplementInTargetTypesAttribute(type);
+            var methodsToGenerate             = new List<(StaticAbstractInfo Info, INamedTypeSymbol Iface, IMethodSymbol DelegateInvoke, ITypeSymbol[] TypeArgs)>();
+
+            foreach (var iface in type.AllInterfaces) {
+                var infos = GetInterfaceContracts(iface.OriginalDefinition, interfaceInfosMap);
+
+                if (infos.Count == 0)
+                    continue;
+
+                var ifaceHasImplementInTargetTypes = HasImplementInTargetTypesAttribute(iface.OriginalDefinition);
+
+                foreach (var info in infos) {
+                    if (info.DelegateSymbol.TypeKind != TypeKind.Delegate)
+                        continue;
+
+                    if (!info.HasDefaultImplementation || info.DefaultMethodSymbol == null)
+                        continue;
+
+                    var effectiveImplement = info.ImplementInTargetTypes ?? (
+                        ifaceHasImplementInTargetTypes || typeHasImplementInTargetTypes || assemblyHasImplementInTargetTypes
+                    );
+
+                    if (!effectiveImplement)
+                        continue;
+
+                    // Build constructed delegate for this interface instance on this type
+                    var typeArgs = new ITypeSymbol[info.DelegateSymbol.TypeParameters.Length];
+
+                    for (var i = 0; i < info.DelegateSymbol.TypeParameters.Length; i++) {
+                        var          dtp        = info.DelegateSymbol.TypeParameters[i];
+                        ITypeSymbol? mappedType = null;
+
+                        for (var j = 0; j < iface.OriginalDefinition.TypeParameters.Length; j++) {
+                            var itp = iface.OriginalDefinition.TypeParameters[j];
+
+                            if (info.TypeParams.TryGetValue(itp.Name, out var targetName) && targetName == dtp.Name) {
+                                mappedType = iface.TypeArguments[j];
+
+                                break;
+                            }
+                        }
+
+                        typeArgs[i] = mappedType ?? dtp;
+                    }
+
+                    var constructedDelegate = info.DelegateSymbol.OriginalDefinition.Construct(typeArgs);
+                    var delegateInvoke      = constructedDelegate.DelegateInvokeMethod;
+
+                    if (delegateInvoke == null)
+                        continue;
+
+                    // Check if type already implements matching method
+                    var matches = type.GetMembers(info.MethodName)
+                        .OfType<IMethodSymbol>()
+                        .Any(m => !IsGenerated(m) && m.IsStatic && m.DeclaredAccessibility == Accessibility.Public && MethodMatchesSignature(m, delegateInvoke));
+
+                    if (matches)
+                        continue;
+
+                    if (!methodsToGenerate.Any(m => m.Info.MethodName == info.MethodName && MethodMatchesSignature(m.DelegateInvoke, delegateInvoke))) {
+                        methodsToGenerate.Add((info, iface, delegateInvoke, typeArgs));
+                    }
+                }
+            }
+
+            if (methodsToGenerate.Count == 0)
+                continue;
+
+            var sb = new StringBuilder();
+
+            sb.AppendLine(
+                """
+                // <auto-generated/>
+                #nullable enable
+                #pragma warning disable
+
+                """
+            );
+
+            var ns = type.ContainingNamespace.IsGlobalNamespace
+                ? ""
+                : type.ContainingNamespace.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            if (ns.StartsWith("global::"))
+                ns = ns.Substring(8);
+
+            if (!string.IsNullOrEmpty(ns)) {
+                sb.AppendLine($"namespace {ns} {{");
+            }
+
+            var typeStack = new Stack<INamedTypeSymbol>();
+            var cur       = type;
+
+            while (cur != null) {
+                typeStack.Push(cur);
+                cur = cur.ContainingType;
+            }
+
+            var indent     = string.IsNullOrEmpty(ns) ? "" : "    ";
+            var openBraces = 0;
+
+            while (typeStack.Count > 0) {
+                var currentType = typeStack.Pop();
+
+                var kindStr = currentType.TypeKind switch {
+                    TypeKind.Struct => currentType.IsRecord ? "record struct" : "struct",
+                    TypeKind.Class  => currentType.IsRecord ? "record class" : "class",
+                    _               => currentType.IsRecord ? "record" : "class"
+                };
+
+                var typeParamsStr = currentType.TypeParameters.Length > 0
+                    ? $"<{string.Join(", ", currentType.TypeParameters.Select(tp => tp.Name))}>"
+                    : "";
+
+                sb.AppendLine($"{indent}partial {kindStr} {currentType.Name}{typeParamsStr} {{");
+                indent += "    ";
+                openBraces++;
+            }
+
+            foreach (var item in methodsToGenerate) {
+                GenerateTargetTypeMethod(sb, item.Info, item.Iface, item.DelegateInvoke, item.TypeArgs, type, indent);
+            }
+
+            while (openBraces > 0) {
+                indent = indent.Substring(4);
+                sb.AppendLine($"{indent}}}");
+                openBraces--;
+            }
+
+            if (!string.IsNullOrEmpty(ns)) {
+                sb.AppendLine("}");
+            }
+
+            var safeTypeName = GetSafeTypeName(type);
+            var hintName     = $"{(string.IsNullOrEmpty(ns) ? "" : ns + "_")}{safeTypeName}_StaticVirtual.g.cs";
+            spc.AddSource(hintName, sb.ToString());
+        }
+    }
+
+    private static void GenerateTargetTypeMethod(
+        StringBuilder      sb,
+        StaticAbstractInfo info,
+        INamedTypeSymbol   iface,
+        IMethodSymbol      delegateInvoke,
+        ITypeSymbol[]      typeArgs,
+        INamedTypeSymbol   targetType,
+        string             indent
+    ) {
+        var defaultMethod = info.DefaultMethodSymbol!;
+        var lookupType    = info.ResolvedDefaultType ?? info.DefaultType ?? info.TargetClass ?? info.InterfaceSymbol;
+
+        var returnAttributes = FormatReturnAttributes(delegateInvoke.OriginalDefinition.GetReturnTypeAttributes());
+        var returnTypeStr    = delegateInvoke.ReturnType.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY);
+
+        var paramList = string.Join(
+            ", ",
+            delegateInvoke.Parameters.Select(
+                p => {
+                    var refKind = p.RefKind switch {
+                        RefKind.Ref => "ref ",
+                        RefKind.Out => "out ",
+                        RefKind.In  => "in ",
+                        _           => p.IsParams ? "params " : ""
+                    };
+
+                    var attrs = FormatAttributes(p.OriginalDefinition.GetAttributes());
+
+                    return $"{attrs}{refKind}{p.Type.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY)} {p.Name}";
+                }
+            )
+        );
+
+        var argList = string.Join(
+            ", ",
+            delegateInvoke.Parameters.Select(
+                p => {
+                    var refKind = p.RefKind switch {
+                        RefKind.Ref => "ref ",
+                        RefKind.Out => "out ",
+                        RefKind.In  => "in ",
+                        _           => ""
+                    };
+
+                    return $"{refKind}{p.Name}";
+                }
+            )
+        );
+
+        string callStr;
+
+        if (SymbolEqualityComparer.Default.Equals(lookupType, info.InterfaceSymbol)) {
+            var ifaceFqn = iface.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY);
+            callStr = $"{ifaceFqn}.{defaultMethod.Name}({argList})";
+        }
+        else {
+            var typeFqn = lookupType.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY);
+
+            if (defaultMethod.IsGenericMethod) {
+                var methodTypeArguments = new List<string>();
+
+                for (var i = 0; i < defaultMethod.TypeParameters.Length; i++) {
+                    var          dtp    = defaultMethod.TypeParameters[i];
+                    ITypeSymbol? mapped = null;
+
+                    for (var j = 0; j < iface.OriginalDefinition.TypeParameters.Length; j++) {
+                        var itp = iface.OriginalDefinition.TypeParameters[j];
+
+                        if (itp.Name == dtp.Name) {
+                            mapped = iface.TypeArguments[j];
+
+                            break;
+                        }
+                    }
+
+                    if (mapped == null) {
+                        foreach (var kvp in info.TypeParams) {
+                            if (kvp.Value == dtp.Name) {
+                                for (var j = 0; j < iface.OriginalDefinition.TypeParameters.Length; j++) {
+                                    if (iface.OriginalDefinition.TypeParameters[j].Name == kvp.Key) {
+                                        mapped = iface.TypeArguments[j];
+
+                                        break;
+                                    }
+                                }
+
+                                if (mapped != null) break;
+                            }
+                        }
+                    }
+
+                    if (mapped == null && i < iface.TypeArguments.Length) {
+                        mapped = iface.TypeArguments[i];
+                    }
+
+                    mapped ??= targetType;
+                    methodTypeArguments.Add(mapped.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY));
+                }
+
+                var typeArgsStr = $"<{string.Join(", ", methodTypeArguments)}>";
+                callStr = $"{typeFqn}.{defaultMethod.Name}{typeArgsStr}({argList})";
+            }
+            else {
+                callStr = $"{typeFqn}.{defaultMethod.Name}({argList})";
+            }
+        }
+
+        var body = delegateInvoke.ReturnsVoid
+            ? $"{indent}    {callStr};\n{indent}    return;"
+            : $"{indent}    return {callStr};";
+
+        sb.AppendLine(
+            $$"""
+            {{indent}}[global::System.CodeDom.Compiler.GeneratedCodeAttribute("Implyzer", "1.0.0")]
+            {{indent}}{{returnAttributes}}public static {{returnTypeStr}} {{info.MethodName}}({{paramList}}) {
+            {{body}}
+            {{indent}}}
+            """
+        );
+    }
+
     private static Dictionary<INamedTypeSymbol, List<ITypeSymbol>> CollectConformingExternalTypes(
         List<(INamedTypeSymbol? TargetInterface, List<ITypeSymbol> Types, bool Strict)> allRegistrations,
         Dictionary<INamedTypeSymbol, List<StaticAbstractInfo>> interfaceInfosMap
@@ -1657,12 +1964,16 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
         INamedTypeSymbol? defaultType    = null;
         string?           defaultMethod  = null;
 
+        bool? implementInTargetTypes = null;
+
         if (attribute != null) {
             foreach (var namedArg in attribute.NamedArguments) {
                 if (namedArg.Key == "DefaultType" && namedArg.Value.Value is INamedTypeSymbol dt)
                     defaultType = dt;
                 else if (namedArg.Key == "DefaultMethod" && namedArg.Value.Value is string dm)
                     defaultMethod = dm;
+                else if (namedArg.Key is "ImplementInTargetTypes" or "GenerateInTargetTypes" && namedArg.Value.Value is bool b)
+                    implementInTargetTypes = b;
             }
         }
 
@@ -1703,6 +2014,8 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                         defaultType ??= semanticModel.GetTypeInfo(typeofExpr.Type).Type as INamedTypeSymbol;
                     else if (name == "DefaultMethod")
                         defaultMethod ??= semanticModel.GetConstantValue(arg.Expression).Value as string;
+                    else if (name is "ImplementInTargetTypes" or "GenerateInTargetTypes")
+                        implementInTargetTypes ??= semanticModel.GetConstantValue(arg.Expression).Value as bool?;
                 }
             }
 
@@ -1737,7 +2050,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
         if (methodName == null || delegateSymbol == null)
             return null;
 
-        var info = new StaticAbstractInfo(methodName, delegateSymbol, typeParams, targetClass, interfaceSymbol, defaultType, defaultMethod, isVirtual);
+        var info = new StaticAbstractInfo(methodName, delegateSymbol, typeParams, targetClass, interfaceSymbol, defaultType, defaultMethod, isVirtual, implementInTargetTypes);
 
         ResolveDefaultImplementation(info, interfaceSymbol);
 
@@ -2118,6 +2431,7 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
         public INamedTypeSymbol?          DefaultType              { get; }
         public string?                    DefaultMethod            { get; }
         public bool                       IsVirtual                { get; }
+        public bool?                      ImplementInTargetTypes   { get; }
         public bool                       HasDefaultImplementation { get; set; }
         public IMethodSymbol?             DefaultMethodSymbol      { get; set; }
         public INamedTypeSymbol?          ResolvedDefaultType      { get; set; }
@@ -2130,16 +2444,18 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
             INamedTypeSymbol           interfaceSymbol,
             INamedTypeSymbol?          defaultType,
             string?                    defaultMethod,
-            bool                       isVirtual
+            bool                       isVirtual,
+            bool?                      implementInTargetTypes = null
         ) {
-            MethodName      = methodName;
-            DelegateSymbol  = delegateSymbol;
-            TypeParams      = typeParams;
-            TargetClass     = targetClass;
-            InterfaceSymbol = interfaceSymbol;
-            DefaultType     = defaultType;
-            DefaultMethod   = defaultMethod;
-            IsVirtual       = isVirtual;
+            MethodName             = methodName;
+            DelegateSymbol         = delegateSymbol;
+            TypeParams             = typeParams;
+            TargetClass            = targetClass;
+            InterfaceSymbol        = interfaceSymbol;
+            DefaultType            = defaultType;
+            DefaultMethod          = defaultMethod;
+            IsVirtual              = isVirtual;
+            ImplementInTargetTypes = implementInTargetTypes;
         }
     }
 
@@ -2157,5 +2473,46 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
             Infos           = infos;
             Registrations   = registrations;
         }
+    }
+
+    private static bool IsGenerated(ISymbol symbol) {
+        if (symbol.GetAttributes().Any(a =>
+            a.AttributeClass?.Name is "GeneratedCodeAttribute" or "CompilerGeneratedAttribute")) {
+            return true;
+        }
+
+        foreach (var syntaxRef in symbol.DeclaringSyntaxReferences) {
+            if (IsGeneratedSyntaxTree(syntaxRef.SyntaxTree))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsGeneratedSyntaxTree(SyntaxTree? tree) {
+        if (tree == null)
+            return false;
+
+        var path = tree.FilePath;
+        if (!string.IsNullOrEmpty(path)) {
+            if (path.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase) ||
+                path.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase) ||
+                path.IndexOf(".StaticVirtual.g.cs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("_StaticVirtual.g.cs", StringComparison.OrdinalIgnoreCase) >= 0) {
+                return true;
+            }
+        }
+
+        var root = tree.GetRoot();
+        if (root.HasLeadingTrivia) {
+            foreach (var trivia in root.GetLeadingTrivia()) {
+                var text = trivia.ToString();
+                if (text.Contains("<auto-generated") || text.Contains("<autogenerated")) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }
