@@ -8,6 +8,8 @@
 //------------------------------------------------------------------------------
 
 #nullable enable
+#pragma warning disable
+#pragma warning disable CS0436
 
 using System;
 
@@ -20,7 +22,7 @@ namespace Implyzer {
     /// versions, it provides companion routing helpers with fallback to the default implementation.
     /// </summary>
     [AttributeUsage(AttributeTargets.Interface, Inherited = false, AllowMultiple = true)]
-    public sealed class StaticVirtualAttribute : StaticAbstractAttribute {
+    internal sealed class StaticVirtualAttribute : StaticAbstractAttribute {
 
         public StaticVirtualAttribute(string methodName, Type signature, params string[] typeParams)
             : base(methodName, signature, typeParams) {

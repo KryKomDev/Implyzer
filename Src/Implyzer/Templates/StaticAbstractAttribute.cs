@@ -8,6 +8,8 @@
 //------------------------------------------------------------------------------
 
 #nullable enable
+#pragma warning disable
+#pragma warning disable CS0436
 
 using System;
 using System.Collections.Generic;
@@ -20,7 +22,7 @@ namespace Implyzer {
     /// for the `static abstract` feature in C# for older runtime versions.
     /// </summary>
     [AttributeUsage(AttributeTargets.Interface, Inherited = false, AllowMultiple = true)]
-    public class StaticAbstractAttribute : Attribute {
+    internal class StaticAbstractAttribute : Attribute {
 
         public Type?                      TargetClass   { get; }
         public string                     MethodName    { get; }

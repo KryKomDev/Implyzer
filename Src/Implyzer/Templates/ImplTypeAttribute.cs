@@ -8,12 +8,14 @@
 //------------------------------------------------------------------------------
 
 #nullable enable
+#pragma warning disable
+#pragma warning disable CS0436
 
 using System;
 
 namespace Implyzer {
 
-    public enum ImplKind {
+    internal enum ImplKind {
         
         /// <summary>
         /// Specifies that the implementation must be of a reference type.
@@ -46,7 +48,7 @@ namespace Implyzer {
     /// The attribute can be applied to interfaces only.
     /// </summary>
     [AttributeUsage(AttributeTargets.Interface)]
-    public sealed class ImplTypeAttribute : Attribute {
+    internal sealed class ImplTypeAttribute : Attribute {
     
         public ImplTypeAttribute(ImplKind kind) {
             Kind = kind;

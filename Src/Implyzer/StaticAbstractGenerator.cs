@@ -1010,6 +1010,42 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
         }
     }
 
+    private static bool HasRegistryMethod(
+        StaticAbstractInfo info,
+        string registryName,
+        Compilation compilation,
+        bool isCSharp11OrGreater,
+        Dictionary<INamedTypeSymbol, List<ITypeSymbol>> conformingExternalTypes
+    ) {
+        if (!isCSharp11OrGreater)
+            return true;
+
+        var inCurrentAssembly = SymbolEqualityComparer.Default.Equals(
+            (info.TargetClass ?? info.InterfaceSymbol).ContainingAssembly,
+            compilation.Assembly
+        );
+
+        if (inCurrentAssembly) {
+            return !isCSharp11OrGreater || (conformingExternalTypes.TryGetValue(info.InterfaceSymbol, out var extList) && extList.Count > 0);
+        }
+
+        INamedTypeSymbol? targetSymbol = info.TargetClass;
+        if (targetSymbol == null) {
+            if (info.InterfaceSymbol.Arity > 0) {
+                targetSymbol = info.InterfaceSymbol.ContainingType?.GetTypeMembers(info.InterfaceSymbol.Name).FirstOrDefault(t => t.Arity == 0)
+                    ?? info.InterfaceSymbol.ContainingNamespace?.GetTypeMembers(info.InterfaceSymbol.Name).FirstOrDefault(t => t.Arity == 0);
+            }
+            else {
+                targetSymbol = info.InterfaceSymbol;
+            }
+        }
+
+        if (targetSymbol == null)
+            return false;
+
+        return targetSymbol.GetMembers($"G_Register_{registryName}").Length > 0;
+    }
+
     private static void GenerateModuleInitializer(
         SourceProductionContext                                spc,
         Dictionary<INamedTypeSymbol, List<StaticAbstractInfo>> interfaceInfosMap,
@@ -1074,6 +1110,9 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                         continue;
 
                     var registryName = GetRegistryIdentifier(info, GetScopeInfos(info, infos));
+
+                    if (!HasRegistryMethod(info, registryName, compilation, isCSharp11OrGreater, conformingExternalTypes))
+                        continue;
 
                     var registryClassFqn = info.TargetClass != null
                         ? info.TargetClass.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY)
@@ -1149,6 +1188,9 @@ public class StaticAbstractGenerator : IIncrementalGenerator {
                         continue;
 
                     var registryName = GetRegistryIdentifier(info, GetScopeInfos(info, contracts));
+
+                    if (!HasRegistryMethod(info, registryName, compilation, isCSharp11OrGreater, conformingExternalTypes))
+                        continue;
 
                     var registryClassFqn = info.TargetClass != null
                         ? info.TargetClass.ToDisplayString(FULLY_QUALIFIED_FORMAT_WITH_NULLABILITY)

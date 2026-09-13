@@ -8,6 +8,8 @@
 //------------------------------------------------------------------------------
 
 #nullable enable
+#pragma warning disable
+#pragma warning disable CS0436
 
 using System;
 
@@ -19,7 +21,7 @@ namespace Implyzer {
     /// implement all required static abstract members.
     /// </summary>
     [AttributeUsage(AttributeTargets.Interface | AttributeTargets.Assembly, AllowMultiple = true, Inherited = false)]
-    public sealed class StaticRegisterAttribute : Attribute {
+    internal sealed class StaticRegisterAttribute : Attribute {
 
         /// <summary>
         /// Types to be structurally verified and registered to the interface.

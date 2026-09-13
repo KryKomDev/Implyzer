@@ -2,8 +2,10 @@
 // Copyright (c) KryKom 2026
 
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Implyzer;
@@ -13,22 +15,36 @@ public class AttributesGenerator : IIncrementalGenerator {
     public void Initialize(IncrementalGeneratorInitializationContext context) {
         context.RegisterSourceOutput(
             context.CompilationProvider,
-            (productionContext, compilation) => {
-                CheckAndRegisterResource(productionContext, compilation, "ImplTypeAttribute",       "Implyzer.ImplTypeAttribute");
-                CheckAndRegisterResource(productionContext, compilation, "IndirectImplAttribute",   "Implyzer.IndirectImplAttribute");
-                CheckAndRegisterResource(productionContext, compilation, "UseInsteadAttribute",     "Implyzer.UseInsteadAttribute");
-                CheckAndRegisterResource(productionContext, compilation, "StaticAbstractAttribute", "Implyzer.StaticAbstractAttribute");
-                CheckAndRegisterResource(productionContext, compilation, "StaticVirtualAttribute",  "Implyzer.StaticVirtualAttribute");
-                CheckAndRegisterResource(productionContext, compilation, "StaticDefaultAttribute",  "Implyzer.StaticDefaultAttribute");
-                CheckAndRegisterResource(productionContext, compilation, "StaticRegisterAttribute",         "Implyzer.StaticRegisterAttribute");
-                CheckAndRegisterResource(productionContext, compilation, "ImplementInTargetTypesAttribute", "Implyzer.ImplementInTargetTypesAttribute");
+            (pCtx, compilation) => {
+                RegSrc(pCtx, compilation, "ImplTypeAttribute");
+                RegSrc(pCtx, compilation, "IndirectImplAttribute");
+                RegSrc(pCtx, compilation, "UseInsteadAttribute");
+                RegSrc(pCtx, compilation, "StaticAbstractAttribute");
+                RegSrc(pCtx, compilation, "StaticVirtualAttribute");
+                RegSrc(pCtx, compilation, "StaticDefaultAttribute");
+                RegSrc(pCtx, compilation, "StaticRegisterAttribute");
+                RegSrc(pCtx, compilation, "ImplementInTargetTypesAttribute");
             }
         );
     }
 
-    private static void CheckAndRegisterResource(SourceProductionContext context, Compilation compilation, string name, string metadataName) {
-        if (compilation.GetTypeByMetadataName(metadataName) is not null)
-            return;
+    private static void RegSrc(SourceProductionContext context, Compilation compilation, string name) {
+        var existingTypes = compilation.GetTypesByMetadataName($"Implyzer.{name}");
+        if (existingTypes.Length > 0) {
+            // If already defined in the current assembly, do not re-emit.
+            if (existingTypes.Any(t => SymbolEqualityComparer.Default.Equals(t.ContainingAssembly, compilation.Assembly)))
+                return;
+
+            // Find all external types that are accessible to the current assembly.
+            var accessibleExternal = existingTypes
+                .Where(t => !SymbolEqualityComparer.Default.Equals(t.ContainingAssembly, compilation.Assembly)
+                            && compilation.IsSymbolAccessibleWithin(t, compilation.Assembly))
+                .ToList();
+
+            // If exactly one accessible external type exists, the current assembly can use it without ambiguity or collision.
+            if (accessibleExternal.Count == 1)
+                return;
+        }
 
         var assembly     = Assembly.GetExecutingAssembly();
         var resourceName = $"Implyzer.Templates.{name}.cs";

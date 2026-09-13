@@ -53,6 +53,8 @@
  
 ## Release 2026.5.3
 
+### New Rules
+
  Rule ID | Category | Severity | Notes                                                
 ---------|----------|----------|------------------------------------------------------
  IMPL017 | Design   | Error    | Target type must be partial                          

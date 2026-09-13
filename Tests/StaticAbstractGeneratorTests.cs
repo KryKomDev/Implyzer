@@ -441,6 +441,87 @@ public class StaticAbstractGeneratorTests {
     }
 
     [Fact]
+    public void TestGeneratorWithMetadataInterfaceCSharp11DoesNotEmitMissingRegistry() {
+        const string librarySource =
+            """
+            using Implyzer;
+
+            namespace Implyzer {
+                public class StaticAbstractAttribute : System.Attribute {
+                    public StaticAbstractAttribute(string methodName, System.Type signature, params string[] typeParams) {}
+                }
+                public class StaticVirtualAttribute : System.Attribute {
+                    public StaticVirtualAttribute(string methodName, System.Type signature, params string[] typeParams) {}
+                }
+            }
+
+            namespace LibraryNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+
+                [Implyzer.StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                public partial interface IParser<TSelf> where TSelf : IParser<TSelf> {}
+            }
+            """;
+
+        var librarySyntaxTree = CSharpSyntaxTree.ParseText(librarySource, new CSharpParseOptions(LanguageVersion.CSharp11));
+        var libraryCompilation = CSharpCompilation.Create(
+            "LibraryAssembly",
+            [librarySyntaxTree],
+            [CORLIB_REFERENCE, SYSTEM_REFERENCE, COMPONENT_MODEL_REFERENCE],
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
+
+        using var ms = new MemoryStream();
+        var emitResult = libraryCompilation.Emit(ms);
+        Assert.True(emitResult.Success, string.Join("\n", emitResult.Diagnostics.Select(d => d.ToString())));
+        ms.Seek(0, SeekOrigin.Begin);
+        var libraryReference = MetadataReference.CreateFromStream(ms);
+
+        const string mainSource =
+            """
+            using LibraryNamespace;
+            using Implyzer;
+
+            [assembly: Implyzer.StaticRegister(typeof(LocalNamespace.ILocalParser<>), typeof(int))]
+
+            namespace LocalNamespace {
+                public delegate bool TryParse<T>(string input, out T result);
+
+                [Implyzer.StaticAbstract("TryParse", typeof(TryParse<object>), "TSelf", "T")]
+                public partial interface ILocalParser<TSelf> where TSelf : ILocalParser<TSelf> {}
+            }
+
+            namespace TestNamespace {
+                public class Color : IParser<Color> {
+                    public static bool TryParse(string input, out Color result) {
+                        result = new Color();
+                        return true;
+                    }
+                }
+            }
+            """;
+
+        var mainSyntaxTree = CSharpSyntaxTree.ParseText(mainSource, new CSharpParseOptions(LanguageVersion.CSharp11));
+        var compilation = CSharpCompilation.Create(
+            "TestAssembly",
+            [mainSyntaxTree],
+            [CORLIB_REFERENCE, SYSTEM_REFERENCE, COMPONENT_MODEL_REFERENCE, libraryReference],
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
+
+        var generator = new StaticAbstractGenerator();
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
+        driver = driver.RunGenerators(compilation);
+        var runResult = driver.GetRunResult();
+
+        Assert.Contains("StaticAbstractRegistry.g.cs", runResult.GeneratedTrees.Select(t => Path.GetFileName(t.FilePath)));
+        var moduleInitializerSource = runResult.GeneratedTrees.First(t => t.FilePath.EndsWith("StaticAbstractRegistry.g.cs")).ToString();
+
+        Assert.Contains("ILocalParser.G_Register_TryParse", moduleInitializerSource);
+        Assert.DoesNotContain("global::LibraryNamespace.IParser.G_Register_TryParse", moduleInitializerSource);
+    }
+
+    [Fact]
     public void TestGeneratorWithRecordTargetClass() {
         const string source =
             """

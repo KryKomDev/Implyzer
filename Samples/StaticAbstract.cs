@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using Implyzer.Sample.Subproject;
 
 namespace Implyzer.Sample;
 
@@ -98,6 +99,17 @@ public partial class Box<T> : ICustomParsable<Box<T>> {
     public override string ToString() => $"Box<{typeof(T).Name}>";
 }
 
+public partial class MainModel : ISubItem<MainModel> {
+    public string Name { get; set; } = "MainModel";
+
+    public static bool TryParseItem(string input, out MainModel result) {
+        result = new MainModel { Name = input };
+        return true;
+    }
+
+    public override string ToString() => Name;
+}
+
 // INVALID: Dog implements ICustomParsable<Dog> but does NOT provide the static TryParse method.
 // Uncomment to see analyzer error IMPL009:
 //     "Type 'Dog' must implement public static method 'TryParse' matching signature of delegate
@@ -169,5 +181,15 @@ public class Program {
         var sampleGuidStr = "d3b07384-d113-4f01-9b16-92c25df60e22";
         var guidSuccess = ICustomParsable.TryParse(typeof(Guid), sampleGuidStr, out var guidObjResult);
         Console.WriteLine($"Registered BCL non-generic TryParse ('{sampleGuidStr}' -> Guid): {guidSuccess}, Result: {guidObjResult}");
+
+        // === Option 6: Multiproject support (subproject interface implemented in main project) ===
+        var subItemParsed = ISubItem.FormatItem(new SubModel { Value = "From Subproject" });
+        Console.WriteLine($"Subproject ISubItem.FormatItem (SubModel): {subItemParsed}");
+
+        var mainItemParsed = ISubItem.FormatItem(new MainModel { Name = "From Main Project" });
+        Console.WriteLine($"Subproject ISubItem.FormatItem (MainModel): {mainItemParsed}");
+
+        var mainDirect = MainModel.FormatItem(new MainModel { Name = "Direct Main" });
+        Console.WriteLine($"Subproject direct FormatItem (MainModel): {mainDirect}");
     }
 }
