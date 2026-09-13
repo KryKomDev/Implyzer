@@ -8,6 +8,8 @@
 //------------------------------------------------------------------------------
 
 #nullable enable
+#pragma warning disable
+#pragma warning disable CS0436
 
 using System;
 using static System.AttributeTargets;
@@ -21,7 +23,7 @@ namespace Implyzer {
     /// in the compiler's eyes (though it generates a suggestion diagnostic).
     /// </summary>
     [AttributeUsage(All & ~(ReturnValue | Assembly | GenericParameter | Module | Parameter), Inherited = false, AllowMultiple = false)]
-    public sealed class UseInsteadAttribute : Attribute {
+    internal sealed class UseInsteadAttribute : Attribute {
 
         /// <summary>
         /// Initializes a new instance of the <see cref="UseInsteadAttribute"/> class

@@ -8,6 +8,8 @@
 //------------------------------------------------------------------------------
 
 #nullable enable
+#pragma warning disable
+#pragma warning disable CS0436
 
 using System;
 
@@ -18,7 +20,7 @@ namespace Implyzer {
     /// for a static abstract/virtual interface method.
     /// </summary>
     [AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = false)]
-    public sealed class StaticDefaultAttribute : Attribute {
+    internal sealed class StaticDefaultAttribute : Attribute {
 
         public string? MethodName { get; }
 

@@ -7,6 +7,11 @@
         <OutputType>exe</OutputType>
 
         <LocalPackagingTest>false</LocalPackagingTest>
+
+        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+        <DefaultItemExcludes>$(DefaultItemExcludes);Subproject\**</DefaultItemExcludes>
+
+        <NoWarn>NETSDK1138</NoWarn>
     </PropertyGroup>
 
     <ItemGroup Condition="'$(LocalPackagingTest)' == 'false'">
@@ -22,5 +27,9 @@
         <PackageReference Include="Implyzer" Version="2026.4.1" OutputItemType="Analyzer" ReferenceOutputAssembly="false">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
+    </ItemGroup>
+    
+    <ItemGroup>
+        <ProjectReference Include=".\Subproject\Implyzer.Sample.Subproject.csproj" />
     </ItemGroup>
 </Project>

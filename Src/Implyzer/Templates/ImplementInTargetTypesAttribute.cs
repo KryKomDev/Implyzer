@@ -8,6 +8,8 @@
 //------------------------------------------------------------------------------
 
 #nullable enable
+#pragma warning disable
+#pragma warning disable CS0436
 
 using System;
 
@@ -21,7 +23,7 @@ namespace Implyzer {
     /// When applied at assembly level, applies globally across all interfaces and implementing types.
     /// </summary>
     [AttributeUsage(AttributeTargets.Interface | AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Assembly, Inherited = false, AllowMultiple = false)]
-    public sealed class ImplementInTargetTypesAttribute : Attribute {
+    internal sealed class ImplementInTargetTypesAttribute : Attribute {
 
         public bool Enabled { get; }
 

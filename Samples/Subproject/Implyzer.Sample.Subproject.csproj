@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net10.0;net5.0</TargetFrameworks>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        
+        <LangVersion>14</LangVersion>
+        
+        <NoWarn>NETSDK1138</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Src\Implyzer\Implyzer.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </ProjectReference>
+        <ProjectReference Include="..\..\Src\Implyzer.CodeFixes\Implyzer.CodeFixes.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </ProjectReference>
+    </ItemGroup>
+</Project>
